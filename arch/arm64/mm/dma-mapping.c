@@ -23,8 +23,14 @@
 #include <linux/genalloc.h>
 #include <linux/dma-mapping.h>
 #include <linux/dma-contiguous.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/platform_device.h>
 #include <linux/vmalloc.h>
 #include <linux/swiotlb.h>
+#include <linux/amba/bus.h>
+#include <linux/acpi.h>
+#include <linux/pci.h>
 
 #include <asm/cacheflush.h>
 
@@ -423,9 +429,106 @@ out:
 	return -ENOMEM;
 }
 
+#ifdef CONFIG_PCI
+static void arm64_of_set_dma_ops(void *_dev)
+{
+	struct device *dev = _dev;
+
+	/*
+	 * PCI devices won't have an ACPI handle but the bridge will.
+	 * Search up the device chain until we find an of_node
+	 * to check.
+	 */
+	while (dev) {
+		if (dev->of_node) {
+			if (of_dma_is_coherent(dev->of_node))
+				set_dma_ops(_dev, &coherent_swiotlb_dma_ops);
+			break;
+		}
+		dev = dev->parent;
+	}
+}
+#else
+static inline arm64_of_set_dma_ops(void *_dev) {}
+#endif
+
+
+#ifdef CONFIG_ACPI
+static void arm64_acpi_set_dma_ops(void *_dev)
+{
+	struct device *dev = _dev;
+
+	/*
+	 * Kernel defaults to noncoherent ops but ACPI 5.1 spec says arm64
+	 * defaults to coherent. Set coherent ops if _CCA not found or _CCA
+	 * found and non-zero.
+	 *
+	 * PCI devices won't have an of_node but the bridge will.
+	 * Search up the device chain until we find an ACPI handle
+	 * to check.
+	 */
+	while (dev) {
+		if (ACPI_HANDLE(dev)) {
+			acpi_status status;
+			int coherent;
+			status =  acpi_check_coherency(ACPI_HANDLE(dev),
+						       &coherent);
+			if (ACPI_FAILURE(status) || coherent)
+				set_dma_ops(_dev, &coherent_swiotlb_dma_ops);
+			break;
+		}
+		dev = dev->parent;
+	}
+}
+#else
+static inline arm64_acpi_set_dma_ops(void *_dev) {}
+#endif
+
+static int dma_bus_notifier(struct notifier_block *nb,
+			    unsigned long event, void *_dev)
+{
+	if (event != BUS_NOTIFY_ADD_DEVICE)
+		return NOTIFY_DONE;
+
+	if (acpi_disabled)
+		arm64_of_set_dma_ops(_dev);
+	else
+		arm64_acpi_set_dma_ops(_dev);
+
+	return NOTIFY_OK;
+}
+
+#ifdef CONFIG_ACPI
+static struct notifier_block platform_bus_nb = {
+	.notifier_call = dma_bus_notifier,
+};
+
+static struct notifier_block amba_bus_nb = {
+	.notifier_call = dma_bus_notifier,
+};
+#endif
+
+#ifdef CONFIG_PCI
+static struct notifier_block pci_bus_nb = {
+	.notifier_call = dma_bus_notifier,
+};
+#endif
+
 static int __init swiotlb_late_init(void)
 {
 	size_t swiotlb_size = min(SZ_64M, MAX_ORDER_NR_PAGES << PAGE_SHIFT);
+
+	/*
+	 * These must be registered before of_platform_populate().
+	 */
+#ifdef CONFIG_ACPI
+	bus_register_notifier(&platform_bus_type, &platform_bus_nb);
+	bus_register_notifier(&amba_bustype, &amba_bus_nb);
+#endif
+
+#ifdef CONFIG_PCI
+	bus_register_notifier(&pci_bus_type, &pci_bus_nb);
+#endif
 
 	dma_ops = &noncoherent_swiotlb_dma_ops;
 
