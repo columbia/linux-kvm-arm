@@ -1,0 +1,246 @@
+/*
+ * DTS file for AMD Seattle SoC
+ *
+ * Copyright (C) 2014 Advanced Micro Devices, Inc.
+ */
+
+/ {
+	compatible = "amd,seattle";
+	interrupt-parent = <&gic0>;
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	gic0: interrupt-controller@e1101000 {
+		compatible = "arm,gic-400", "arm,cortex-a15-gic";
+		interrupt-controller;
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		reg = <0x0 0xe1110000 0 0x1000>,
+		      <0x0 0xe112f000 0 0x2000>,
+		      <0x0 0xe1140000 0 0x10000>,
+		      <0x0 0xe1160000 0 0x10000>;
+		interrupts = <1 9 0xf04>;
+		ranges = <0 0 0 0xe1100000 0 0x100000>;
+		v2m0: v2m@e0080000 {
+			compatible = "arm,gic-v2m-frame";
+			msi-controller;
+			reg = <0x0 0x00080000 0 0x1000>;
+		};
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <1 13 0xff04>,
+			     <1 14 0xff04>,
+			     <1 11 0xff04>,
+			     <1 10 0xff04>;
+	};
+
+	pmu {
+		compatible = "arm,armv8-pmuv3";
+		interrupts = <0 7 4>,
+			     <0 8 4>,
+			     <0 9 4>,
+			     <0 10 4>,
+			     <0 11 4>,
+			     <0 12 4>,
+			     <0 13 4>,
+			     <0 14 4>;
+	};
+
+	smb0: smb {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		/* DDR range is 40-bit addressing */
+		dma-ranges = <0x80 0x0 0x80 0x0 0x7f 0xffffffff>;
+
+		/include/ "amd-seattle-clks.dtsi"
+
+		sata0: sata@e0300000 {
+			compatible = "snps,dwc-ahci";
+			reg = <0 0xe0300000 0 0x800>;
+			interrupts = <0 355 4>;
+			clocks = <&sataclk_333mhz>;
+			dma-coherent;
+		};
+
+		i2c0: i2c@e1000000 {
+			status = "disabled";
+			compatible = "snps,designware-i2c";
+			reg = <0 0xe1000000 0 0x1000>;
+			interrupts = <0 357 4>;
+			clocks = <&uartspiclk_100mhz>;
+		};
+
+		serial0: serial@e1010000 {
+			compatible = "arm,pl011", "arm,primecell";
+			reg = <0 0xe1010000 0 0x1000>;
+			interrupts = <0 328 4>;
+			clocks = <&uartspiclk_100mhz>, <&uartspiclk_100mhz>;
+			clock-names = "uartclk", "apb_pclk";
+		};
+
+		spi0: ssp@e1020000 {
+			status = "disabled";
+			compatible = "arm,pl022", "arm,primecell";
+			#gpio-cells = <2>;
+			reg = <0 0xe1020000 0 0x1000>;
+			spi-controller;
+			interrupts = <0 330 4>;
+			clocks = <&uartspiclk_100mhz>;
+			clock-names = "apb_pclk";
+		};
+
+		spi1: ssp@e1030000 {
+			status = "disabled";
+			compatible = "arm,pl022", "arm,primecell";
+			#gpio-cells = <2>;
+			reg = <0 0xe1030000 0 0x1000>;
+			spi-controller;
+			interrupts = <0 329 4>;
+			clocks = <&uartspiclk_100mhz>;
+			clock-names = "apb_pclk";
+			num-cs = <1>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		gpio0: gpio@e1040000 {
+			status = "disabled";
+			compatible = "arm,pl061", "arm,primecell";
+			#gpio-cells = <2>;
+			reg = <0 0xe1040000 0 0x1000>;
+			gpio-controller;
+			interrupts = <0 359 4>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			clocks = <&uartspiclk_100mhz>;
+			clock-names = "apb_pclk";
+		};
+
+		gpio1: gpio@e1050000 {
+			status = "disabled";
+			compatible = "arm,pl061", "arm,primecell";
+			#gpio-cells = <2>;
+			reg = <0 0xe1050000 0 0x1000>;
+			gpio-controller;
+			interrupts = <0 358 4>;
+			clocks = <&uartspiclk_100mhz>;
+			clock-names = "apb_pclk";
+		};
+
+		ccp0: ccp@e0100000 {
+			status = "disabled";
+			compatible = "amd,ccp-seattle-v1a";
+			reg = <0 0xe0100000 0 0x10000>;
+			interrupts = <0 3 4>;
+			dma-coherent;
+		};
+
+		pcie0: pcie@f0000000 {
+			compatible = "pci-host-ecam-generic";
+			#address-cells = <3>;
+			#size-cells = <2>;
+			#interrupt-cells = <1>;
+			device_type = "pci";
+			bus-range = <0 0xff>;
+			msi-parent = <&v2m0>;
+			reg = <0 0xf0000000 0 0x10000000>;
+
+			interrupt-map-mask = <0xf800 0x0 0x0 0x7>;
+			interrupt-map =
+				<0x1000 0x0 0x0 0x1 &gic0 0x0 0x0 0x0 0x120 0x1>,
+				<0x1000 0x0 0x0 0x2 &gic0 0x0 0x0 0x0 0x121 0x1>,
+				<0x1000 0x0 0x0 0x3 &gic0 0x0 0x0 0x0 0x122 0x1>,
+				<0x1000 0x0 0x0 0x4 &gic0 0x0 0x0 0x0 0x123 0x1>;
+
+			dma-coherent;
+			dma-ranges = <0x43000000 0x80 0x0 0x80 0x0 0x7f 0xffffffff>;
+			ranges =
+				/* I/O Memory (size=64K) */
+				<0x01000000 0x00 0x00000000 0x00 0xefff0000 0x00 0x00010000>,
+				/* 32-bit MMIO (size=2G) */
+				<0x02000000 0x00 0x40000000 0x00 0x40000000 0x00 0x80000000>,
+				/* 64-bit MMIO (size= 124G) */
+				<0x03000000 0x01 0x00000000 0x01 0x00000000 0x7f 0x00000000>;
+		};
+
+		xgmac0_phy: phy@01240800 {
+			compatible = "amd,xgbe-phy-seattle-v0a";
+			reg = <0 0x01240800 0 0x00400>, // SERDES RX/TX0
+			      <0 0x01240000 0 0x00800>; // SERDES CMUs
+			interrupts = <0 323 4>;
+			amd,serdes-channel = <0>;
+			amd,speed-set = <0>;
+		};
+
+		xgmac1_phy: phy@01240C00 {
+			compatible = "amd,xgbe-phy-seattle-v0a";
+			reg = <0 0x01240C00 0 0x00400>, // SERDES RX/TX1
+			      <0 0x01240000 0 0x00800>; // SERDES CMUs
+			interrupts = <0 322 4>;
+			amd,serdes-channel = <1>;
+			amd,speed-set = <0>;
+		};
+
+		xgmac0: xgmac@00700000 {
+			compatible = "amd,xgbe-seattle-v0a";
+			reg = <0 0x00700000 0 0x80000>,
+			      <0 0x00780000 0 0x80000>;
+			interrupts = <0 325 4>;
+			mac-address = [ 02 A1 A2 A3 A4 A5 ];
+			clocks = <&xgmacclk0_dma_250mhz>, <&xgmacclk0_ptp_250mhz>;
+			clock-names = "dma_clk", "ptp_clk";
+			phy-handle = <&xgmac0_phy>;
+			phy-mode = "xgmii";
+			#stream-id-cells = <24>;
+			dma-coherent;
+		};
+
+		xgmac0_smmu: smmu@00600000 {
+			compatible = "arm,mmu-400";
+			reg = <0 0x00600000 0 0x10000>;
+			#global-interrupts = <1>;
+			interrupts =
+				<0 351 4>, // comb_irpt_ns
+				<0 353 4>; // ctx_irpt_ns
+
+			mmu-masters = <&xgmac0
+				0  1  2  3  4  5  6  7  8  9 10 11
+				16 17 18 19 20 21 22 23 24 25 26 27
+			>;
+		};
+
+		xgmac1: xgmac@00900000 {
+			compatible = "amd,xgbe-seattle-v0a";
+		reg = <0 0x00900000 0 0x80000>,
+		      <0 0x00980000 0 0x80000>;
+			interrupts = <0 324 4>;
+			mac-address = [ 02 B1 B2 B3 B4 B5 ];
+			clocks = <&xgmacclk1_dma_250mhz>, <&xgmacclk1_ptp_250mhz>;
+			clock-names = "dma_clk", "ptp_clk";
+			phy-handle = <&xgmac1_phy>;
+			phy-mode = "xgmii";
+			#stream-id-cells = <24>;
+			dma-coherent;
+		};
+
+		xgmac1_smmu: smmu@00800000 {
+			compatible = "arm,mmu-400";
+		reg = <0 0x00800000 0 0x10000>;
+			#global-interrupts = <1>;
+			interrupts =
+				<0 347 4>, // comb_irpt_ns
+				<0 349 4>; // ctx_irpt_ns
+
+			mmu-masters = <&xgmac1
+				0  1  2  3  4  5  6  7  8  9 10 11
+				16 17 18 19 20 21 22 23 24 25 26 27
+				>;
+		};
+	};
+};
