@@ -172,6 +172,12 @@
 #define XGBE_DMA_CLOCK		"dma_clk"
 #define XGBE_PTP_CLOCK		"ptp_clk"
 
+/* ACPI property names */
+#define XGBE_ACPI_MAC_ADDR	"mac-address"
+#define XGBE_ACPI_PHY_MODE	"phy-mode"
+#define XGBE_ACPI_DMA_FREQ	"amd,dma-freq"
+#define XGBE_ACPI_PTP_FREQ	"amd,ptp-freq"
+
 /* Timestamp support - values based on 50MHz PTP clock
  *   50MHz => 20 nsec
  */
@@ -572,6 +578,7 @@ struct xgbe_hw_features {
 struct xgbe_prv_data {
 	struct net_device *netdev;
 	struct platform_device *pdev;
+	struct acpi_device *adev;
 	struct device *dev;
 
 	/* XGMAC/XPCS related mmio registers */
@@ -652,6 +659,7 @@ struct xgbe_prv_data {
 	unsigned int phy_rx_pause;
 
 	/* Netdev related settings */
+	unsigned char mac_addr[MAX_ADDR_LEN];
 	netdev_features_t netdev_features;
 	struct napi_struct napi;
 	struct xgbe_mmc_stats mmc_stats;
@@ -661,7 +669,9 @@ struct xgbe_prv_data {
 
 	/* Device clocks */
 	struct clk *sysclk;
+	unsigned long sysclk_rate;
 	struct clk *ptpclk;
+	unsigned long ptpclk_rate;
 
 	/* Timestamp support */
 	spinlock_t tstamp_lock;

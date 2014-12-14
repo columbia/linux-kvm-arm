@@ -124,6 +124,7 @@
 #include <linux/of.h>
 #include <linux/of_net.h>
 #include <linux/clk.h>
+#include <linux/acpi.h>
 
 #include "xgbe.h"
 #include "xgbe-common.h"
@@ -231,6 +232,205 @@ static void xgbe_init_all_fptrs(struct xgbe_prv_data *pdata)
 	xgbe_init_function_ptrs_desc(&pdata->desc_if);
 }
 
+static int xgbe_map_resources(struct xgbe_prv_data *pdata)
+{
+	struct platform_device *pdev = pdata->pdev;
+	struct device *dev = pdata->dev;
+	struct resource *res;
+
+	/* Obtain the mmio areas for the device */
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	pdata->xgmac_regs = devm_ioremap_resource(dev, res);
+	if (IS_ERR(pdata->xgmac_regs)) {
+		dev_err(dev, "xgmac ioremap failed\n");
+		return PTR_ERR(pdata->xgmac_regs);
+	}
+	DBGPR("  xgmac_regs = %p\n", pdata->xgmac_regs);
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	pdata->xpcs_regs = devm_ioremap_resource(dev, res);
+	if (IS_ERR(pdata->xpcs_regs)) {
+		dev_err(dev, "xpcs ioremap failed\n");
+		return PTR_ERR(pdata->xpcs_regs);
+	}
+	DBGPR("  xpcs_regs  = %p\n", pdata->xpcs_regs);
+
+	return 0;
+}
+
+#ifdef CONFIG_ACPI
+static int xgbe_acpi_support(struct xgbe_prv_data *pdata)
+{
+	struct acpi_device *adev = pdata->adev;
+	struct device *dev = pdata->dev;
+	const union acpi_object *property;
+	acpi_status status;
+	u64 cca;
+	unsigned int i;
+	int ret;
+
+	/* Map the memory resources */
+	ret = xgbe_map_resources(pdata);
+	if (ret)
+		return ret;
+
+	/* Obtain the system clock setting */
+	ret = acpi_dev_get_property(adev, XGBE_ACPI_DMA_FREQ, ACPI_TYPE_INTEGER,
+				    &property);
+	if (ret) {
+		dev_err(dev, "unable to obtain %s acpi property\n",
+			XGBE_ACPI_DMA_FREQ);
+		return ret;
+	}
+	pdata->sysclk_rate = property->integer.value;
+
+	/* Obtain the PTP clock setting */
+	ret = acpi_dev_get_property(adev, XGBE_ACPI_PTP_FREQ, ACPI_TYPE_INTEGER,
+				    &property);
+	if (ret) {
+		dev_err(dev, "unable to obtain %s acpi property\n",
+			XGBE_ACPI_PTP_FREQ);
+		return ret;
+	}
+	pdata->ptpclk_rate = property->integer.value;
+
+	/* Retrieve the MAC address */
+	ret = acpi_dev_get_property_array(adev, XGBE_ACPI_MAC_ADDR,
+					  ACPI_TYPE_INTEGER, &property);
+	if (ret) {
+		dev_err(dev, "unable to obtain %s acpi property\n",
+			XGBE_ACPI_MAC_ADDR);
+		return ret;
+	}
+	if (property->package.count != 6) {
+		dev_err(dev, "invalid %s acpi property\n",
+			XGBE_ACPI_MAC_ADDR);
+		return -EINVAL;
+	}
+	for (i = 0; i < property->package.count; i++) {
+		union acpi_object *obj = &property->package.elements[i];
+
+		pdata->mac_addr[i] = (u8)obj->integer.value;
+	}
+	if (!is_valid_ether_addr(pdata->mac_addr)) {
+		dev_err(dev, "invalid %s acpi property\n",
+			XGBE_ACPI_MAC_ADDR);
+		return -EINVAL;
+	}
+
+	/* Retrieve the PHY mode - it must be "xgmii" */
+	ret = acpi_dev_get_property(adev, XGBE_ACPI_PHY_MODE, ACPI_TYPE_STRING,
+				    &property);
+	if (ret) {
+		dev_err(dev, "unable to obtain %s acpi property\n",
+			XGBE_ACPI_PHY_MODE);
+		return ret;
+	}
+	if (strcmp(property->string.pointer,
+		   phy_modes(PHY_INTERFACE_MODE_XGMII))) {
+		dev_err(dev, "invalid %s acpi property\n",
+			XGBE_ACPI_PHY_MODE);
+		return -EINVAL;
+	}
+	pdata->phy_mode = PHY_INTERFACE_MODE_XGMII;
+
+#ifndef METHOD_NAME__CCA
+#define METHOD_NAME__CCA "_CCA"
+#endif
+	/* Set the device cache coherency values */
+	if (acpi_has_method(adev->handle, METHOD_NAME__CCA)) {
+		status = acpi_evaluate_integer(adev->handle, METHOD_NAME__CCA,
+					       NULL, &cca);
+		if (ACPI_FAILURE(status)) {
+			dev_err(dev, "error obtaining acpi _CCA method\n");
+			return -EINVAL;
+		}
+	} else {
+		cca = 0;
+	}
+
+	if (cca) {
+		pdata->axdomain = XGBE_DMA_OS_AXDOMAIN;
+		pdata->arcache = XGBE_DMA_OS_ARCACHE;
+		pdata->awcache = XGBE_DMA_OS_AWCACHE;
+	} else {
+		pdata->axdomain = XGBE_DMA_SYS_AXDOMAIN;
+		pdata->arcache = XGBE_DMA_SYS_ARCACHE;
+		pdata->awcache = XGBE_DMA_SYS_AWCACHE;
+	}
+
+	return 0;
+}
+#else   /* CONFIG_ACPI */
+static int xgbe_acpi_support(struct xgbe_prv_data *pdata)
+{
+	return -EINVAL;
+}
+#endif  /* CONFIG_ACPI */
+
+#ifdef CONFIG_OF
+static int xgbe_of_support(struct xgbe_prv_data *pdata)
+{
+	struct device *dev = pdata->dev;
+	const u8 *mac_addr;
+	int ret;
+
+	/* Map the memory resources */
+	ret = xgbe_map_resources(pdata);
+	if (ret)
+		return ret;
+
+	/* Obtain the system clock setting */
+	pdata->sysclk = devm_clk_get(dev, XGBE_DMA_CLOCK);
+	if (IS_ERR(pdata->sysclk)) {
+		dev_err(dev, "dma devm_clk_get failed\n");
+		return PTR_ERR(pdata->sysclk);
+	}
+	pdata->sysclk_rate = clk_get_rate(pdata->sysclk);
+
+	/* Obtain the PTP clock setting */
+	pdata->ptpclk = devm_clk_get(dev, XGBE_PTP_CLOCK);
+	if (IS_ERR(pdata->ptpclk)) {
+		dev_err(dev, "ptp devm_clk_get failed\n");
+		return PTR_ERR(pdata->ptpclk);
+	}
+	pdata->ptpclk_rate = clk_get_rate(pdata->ptpclk);
+
+	/* Retrieve the MAC address */
+	mac_addr = of_get_mac_address(dev->of_node);
+	if (!mac_addr) {
+		dev_err(dev, "invalid mac address for this device\n");
+		return -EINVAL;
+	}
+	memcpy(pdata->mac_addr, mac_addr, ETH_ALEN);
+
+	/* Retrieve the PHY mode - it must be "xgmii" */
+	pdata->phy_mode = of_get_phy_mode(dev->of_node);
+	if (pdata->phy_mode != PHY_INTERFACE_MODE_XGMII) {
+		dev_err(dev, "invalid phy-mode specified for this device\n");
+		return -EINVAL;
+	}
+
+	/* Set the device cache coherency values */
+	if (of_property_read_bool(dev->of_node, "dma-coherent")) {
+		pdata->axdomain = XGBE_DMA_OS_AXDOMAIN;
+		pdata->arcache = XGBE_DMA_OS_ARCACHE;
+		pdata->awcache = XGBE_DMA_OS_AWCACHE;
+	} else {
+		pdata->axdomain = XGBE_DMA_SYS_AXDOMAIN;
+		pdata->arcache = XGBE_DMA_SYS_ARCACHE;
+		pdata->awcache = XGBE_DMA_SYS_AWCACHE;
+	}
+
+	return 0;
+}
+#else   /* CONFIG_OF */
+static int xgbe_of_support(struct xgbe_prv_data *pdata)
+{
+	return -EINVAL;
+}
+#endif  /*CONFIG_OF */
+
 static int xgbe_probe(struct platform_device *pdev)
 {
 	struct xgbe_prv_data *pdata;
@@ -238,8 +438,6 @@ static int xgbe_probe(struct platform_device *pdev)
 	struct xgbe_desc_if *desc_if;
 	struct net_device *netdev;
 	struct device *dev = &pdev->dev;
-	struct resource *res;
-	const u8 *mac_addr;
 	int ret;
 
 	DBGPR("--> xgbe_probe\n");
@@ -255,6 +453,7 @@ static int xgbe_probe(struct platform_device *pdev)
 	pdata = netdev_priv(netdev);
 	pdata->netdev = netdev;
 	pdata->pdev = pdev;
+	pdata->adev = ACPI_COMPANION(dev);
 	pdata->dev = dev;
 	platform_set_drvdata(pdev, netdev);
 
@@ -280,40 +479,13 @@ static int xgbe_probe(struct platform_device *pdev)
 		goto err_io;
 	}
 
-	/* Obtain the system clock setting */
-	pdata->sysclk = devm_clk_get(dev, XGBE_DMA_CLOCK);
-	if (IS_ERR(pdata->sysclk)) {
-		dev_err(dev, "dma devm_clk_get failed\n");
-		ret = PTR_ERR(pdata->sysclk);
+	/* Obtain device settings */
+	if (pdata->adev && !acpi_disabled)
+		ret = xgbe_acpi_support(pdata);
+	else
+		ret = xgbe_of_support(pdata);
+	if (ret)
 		goto err_io;
-	}
-
-	/* Obtain the PTP clock setting */
-	pdata->ptpclk = devm_clk_get(dev, XGBE_PTP_CLOCK);
-	if (IS_ERR(pdata->ptpclk)) {
-		dev_err(dev, "ptp devm_clk_get failed\n");
-		ret = PTR_ERR(pdata->ptpclk);
-		goto err_io;
-	}
-
-	/* Obtain the mmio areas for the device */
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	pdata->xgmac_regs = devm_ioremap_resource(dev, res);
-	if (IS_ERR(pdata->xgmac_regs)) {
-		dev_err(dev, "xgmac ioremap failed\n");
-		ret = PTR_ERR(pdata->xgmac_regs);
-		goto err_io;
-	}
-	DBGPR("  xgmac_regs = %p\n", pdata->xgmac_regs);
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	pdata->xpcs_regs = devm_ioremap_resource(dev, res);
-	if (IS_ERR(pdata->xpcs_regs)) {
-		dev_err(dev, "xpcs ioremap failed\n");
-		ret = PTR_ERR(pdata->xpcs_regs);
-		goto err_io;
-	}
-	DBGPR("  xpcs_regs  = %p\n", pdata->xpcs_regs);
 
 	/* Set the DMA mask */
 	if (!dev->dma_mask)
@@ -324,23 +496,16 @@ static int xgbe_probe(struct platform_device *pdev)
 		goto err_io;
 	}
 
-	if (of_property_read_bool(dev->of_node, "dma-coherent")) {
-		pdata->axdomain = XGBE_DMA_OS_AXDOMAIN;
-		pdata->arcache = XGBE_DMA_OS_ARCACHE;
-		pdata->awcache = XGBE_DMA_OS_AWCACHE;
-	} else {
-		pdata->axdomain = XGBE_DMA_SYS_AXDOMAIN;
-		pdata->arcache = XGBE_DMA_SYS_ARCACHE;
-		pdata->awcache = XGBE_DMA_SYS_AWCACHE;
-	}
-
+	/* Get the device interrupt */
 	ret = platform_get_irq(pdev, 0);
 	if (ret < 0) {
 		dev_err(dev, "platform_get_irq failed\n");
 		goto err_io;
 	}
+
 	netdev->irq = ret;
 	netdev->base_addr = (unsigned long)pdata->xgmac_regs;
+	memcpy(netdev->dev_addr, pdata->mac_addr, netdev->addr_len);
 
 	/* Set all the function pointers */
 	xgbe_init_all_fptrs(pdata);
@@ -352,23 +517,6 @@ static int xgbe_probe(struct platform_device *pdev)
 
 	/* Populate the hardware features */
 	xgbe_get_all_hw_features(pdata);
-
-	/* Retrieve the MAC address */
-	mac_addr = of_get_mac_address(dev->of_node);
-	if (!mac_addr) {
-		dev_err(dev, "invalid mac address for this device\n");
-		ret = -EINVAL;
-		goto err_io;
-	}
-	memcpy(netdev->dev_addr, mac_addr, netdev->addr_len);
-
-	/* Retrieve the PHY mode - it must be "xgmii" */
-	pdata->phy_mode = of_get_phy_mode(dev->of_node);
-	if (pdata->phy_mode != PHY_INTERFACE_MODE_XGMII) {
-		dev_err(dev, "invalid phy-mode specified for this device\n");
-		ret = -EINVAL;
-		goto err_io;
-	}
 
 	/* Set default configuration data */
 	xgbe_default_config(pdata);
@@ -547,18 +695,35 @@ static int xgbe_resume(struct device *dev)
 }
 #endif /* CONFIG_PM */
 
+#ifdef CONFIG_ACPI
+static const struct acpi_device_id xgbe_acpi_match[] = {
+	{ "AMDI8000", 0 },
+	{},
+};
+
+MODULE_DEVICE_TABLE(acpi, xgbe_acpi_match);
+#endif
+
+#ifdef CONFIG_OF
 static const struct of_device_id xgbe_of_match[] = {
 	{ .compatible = "amd,xgbe-seattle-v0a", },
 	{},
 };
 
 MODULE_DEVICE_TABLE(of, xgbe_of_match);
+#endif
+
 static SIMPLE_DEV_PM_OPS(xgbe_pm_ops, xgbe_suspend, xgbe_resume);
 
 static struct platform_driver xgbe_driver = {
 	.driver = {
 		.name = "amd-xgbe",
+#ifdef CONFIG_ACPI
+		.acpi_match_table = xgbe_acpi_match,
+#endif
+#ifdef CONFIG_OF
 		.of_match_table = xgbe_of_match,
+#endif
 		.pm = &xgbe_pm_ops,
 	},
 	.probe = xgbe_probe,
