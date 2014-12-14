@@ -243,10 +243,10 @@ struct xgbe_packet_data {
 
 /* Common Rx and Tx descriptor mapping */
 struct xgbe_ring_desc {
-	unsigned int desc0;
-	unsigned int desc1;
-	unsigned int desc2;
-	unsigned int desc3;
+	u32 desc0;
+	u32 desc1;
+	u32 desc2;
+	u32 desc3;
 };
 
 /* Structure used to hold information related to the descriptor
@@ -465,7 +465,7 @@ struct xgbe_hw_if {
 
 	int (*enable_int)(struct xgbe_channel *, enum xgbe_int);
 	int (*disable_int)(struct xgbe_channel *, enum xgbe_int);
-	void (*pre_xmit)(struct xgbe_channel *);
+	void (*dev_xmit)(struct xgbe_channel *);
 	int (*dev_read)(struct xgbe_channel *);
 	void (*tx_desc_init)(struct xgbe_channel *);
 	void (*rx_desc_init)(struct xgbe_channel *);
