@@ -128,9 +128,8 @@
 #include <linux/net_tstamp.h>
 #include <net/dcbnl.h>
 
-
 #define XGBE_DRV_NAME		"amd-xgbe"
-#define XGBE_DRV_VERSION	"1.0.0-a"
+#define XGBE_DRV_VERSION	"0.0.0-a"
 #define XGBE_DRV_DESC		"AMD 10 Gigabit Ethernet Driver"
 
 /* Descriptor related defines */
@@ -187,7 +186,10 @@
 #define XGBE_FIFO_SIZE_B(x)	(x)
 #define XGBE_FIFO_SIZE_KB(x)	(x * 1024)
 
+#define XGBE_TC_CNT		2
 #define XGBE_TC_MIN_QUANTUM	10
+
+#define XGBE_SEATTLE_A0		((read_cpuid_id() & 0x00f0000f) == 0)
 
 /* Helper macro for descriptor handling
  *  Always use XGBE_GET_DESC_DATA to access the descriptor data
@@ -198,7 +200,6 @@
 #define XGBE_GET_DESC_DATA(_ring, _idx)				\
 	((_ring)->rdata +					\
 	 ((_idx) & ((_ring)->rdesc_count - 1)))
-
 
 /* Default coalescing parameters */
 #define XGMAC_INIT_DMA_TX_USECS		50

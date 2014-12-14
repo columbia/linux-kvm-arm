@@ -117,6 +117,7 @@
 #include <linux/spinlock.h>
 #include <linux/tcp.h>
 #include <linux/if_vlan.h>
+#include <linux/phy.h>
 #include <net/busy_poll.h>
 #include <linux/clk.h>
 #include <linux/if_ether.h>
@@ -125,7 +126,6 @@
 
 #include "xgbe.h"
 #include "xgbe-common.h"
-
 
 static int xgbe_poll(struct napi_struct *, int);
 static void xgbe_set_rx_mode(struct net_device *);
@@ -425,6 +425,9 @@ void xgbe_get_all_hw_features(struct xgbe_prv_data *pdata)
 	hw_feat->tx_q_cnt++;
 	hw_feat->rx_ch_cnt++;
 	hw_feat->tx_ch_cnt++;
+
+	/* A0 does not support NUMTC, hardcode it for now */
+	hw_feat->tc_cnt = XGBE_TC_CNT;
 
 	DBGPR("<--xgbe_get_all_hw_features\n");
 }

@@ -128,11 +128,14 @@
 #include "xgbe.h"
 #include "xgbe-common.h"
 
-
 MODULE_AUTHOR("Tom Lendacky <thomas.lendacky@amd.com>");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION(XGBE_DRV_VERSION);
 MODULE_DESCRIPTION(XGBE_DRV_DESC);
+
+unsigned int speed = 0;
+module_param(speed, uint, 0444);
+MODULE_PARM_DESC(speed, " Select operating speed (1=1GbE, 2=2.5GbE, 10=10GbE, any other value implies auto-negotiation");
 
 static struct xgbe_channel *xgbe_alloc_rings(struct xgbe_prv_data *pdata)
 {
@@ -204,8 +207,20 @@ static void xgbe_default_config(struct xgbe_prv_data *pdata)
 	pdata->tx_pause = 1;
 	pdata->rx_pause = 1;
 	pdata->power_down = 0;
-	pdata->default_autoneg = AUTONEG_ENABLE;
-	pdata->default_speed = SPEED_10000;
+
+	if (speed == 10) {
+		pdata->default_autoneg = AUTONEG_DISABLE;
+		pdata->default_speed = SPEED_10000;
+	} else if (speed == 2) {
+		pdata->default_autoneg = AUTONEG_DISABLE;
+		pdata->default_speed = SPEED_2500;
+	} else if (speed == 1) {
+		pdata->default_autoneg = AUTONEG_DISABLE;
+		pdata->default_speed = SPEED_1000;
+	} else {
+		pdata->default_autoneg = AUTONEG_ENABLE;
+		pdata->default_speed = SPEED_10000;
+	}
 
 	DBGPR("<--xgbe_default_config\n");
 }
@@ -533,7 +548,7 @@ static int xgbe_resume(struct device *dev)
 #endif /* CONFIG_PM */
 
 static const struct of_device_id xgbe_of_match[] = {
-	{ .compatible = "amd,xgbe-seattle-v1a", },
+	{ .compatible = "amd,xgbe-seattle-v0a", },
 	{},
 };
 

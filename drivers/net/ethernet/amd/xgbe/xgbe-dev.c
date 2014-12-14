@@ -118,10 +118,10 @@
 #include <linux/clk.h>
 #include <linux/bitrev.h>
 #include <linux/crc32.h>
+#include <asm/cputype.h>
 
 #include "xgbe.h"
 #include "xgbe-common.h"
-
 
 static unsigned int xgbe_usec_to_riwt(struct xgbe_prv_data *pdata,
 				      unsigned int usec)
@@ -695,6 +695,18 @@ static int xgbe_read_mmd_regs(struct xgbe_prv_data *pdata, int prtad,
 		mmd_address = mmd_reg & ~MII_ADDR_C45;
 	else
 		mmd_address = (pdata->mdio_mmd << 16) | (mmd_reg & 0xffff);
+
+	if (XGBE_SEATTLE_A0) {
+		/* The PCS implementation has reversed the devices in
+		 * package registers so we need to change 05 to 06 and
+		 * 06 to 05 if being read (these registers are readonly
+		 * so no need to do this in the write function)
+		 */
+		if ((mmd_address & 0xffff) == 0x05)
+			mmd_address = (mmd_address & ~0xffff) | 0x06;
+		else if ((mmd_address & 0xffff) == 0x06)
+			mmd_address = (mmd_address & ~0xffff) | 0x05;
+	}
 
 	/* The PCS registers are accessed using mmio. The underlying APB3
 	 * management interface uses indirect addressing to access the MMD
@@ -2342,6 +2354,14 @@ static void xgbe_disable_tx(struct xgbe_prv_data *pdata)
 
 		XGMAC_DMA_IOWRITE_BITS(channel, DMA_CH_TCR, ST, 0);
 	}
+
+	/*TODO: Poll to be sure the channels have stopped?
+	while (count--) {
+		if (XGMAC_IOREAD_BITS(pdata, DMA_DSR0, TPS) == 6)
+			break;
+		mdelay(1);
+	}
+	*/
 }
 
 static void xgbe_enable_rx(struct xgbe_prv_data *pdata)
@@ -2393,6 +2413,15 @@ static void xgbe_disable_rx(struct xgbe_prv_data *pdata)
 
 		XGMAC_DMA_IOWRITE_BITS(channel, DMA_CH_RCR, SR, 0);
 	}
+
+	/*TODO: Poll to be sure the channels have stopped?
+	while (count--) {
+		dma_sr0 = XGMAC_IOREAD_BITS(pdata, DMA_DSR0, RPS);
+		if (dma_sr0 == 3 || dma_sr0 == 4)
+			break;
+		mdelay(1);
+	}
+	*/
 }
 
 static void xgbe_powerup_tx(struct xgbe_prv_data *pdata)
@@ -2429,6 +2458,14 @@ static void xgbe_powerdown_tx(struct xgbe_prv_data *pdata)
 
 		XGMAC_DMA_IOWRITE_BITS(channel, DMA_CH_TCR, ST, 0);
 	}
+
+	/*TODO: Poll to be sure the channels have stopped?
+	while (count--) {
+		if (XGMAC_IOREAD_BITS(pdata, DMA_DSR0, TPS) == 6)
+			break;
+		mdelay(1);
+	}
+	*/
 }
 
 static void xgbe_powerup_rx(struct xgbe_prv_data *pdata)
@@ -2459,6 +2496,15 @@ static void xgbe_powerdown_rx(struct xgbe_prv_data *pdata)
 
 		XGMAC_DMA_IOWRITE_BITS(channel, DMA_CH_RCR, SR, 0);
 	}
+
+	/*TODO: Poll to be sure the channels have stopped?
+	while (count--) {
+		dma_sr0 = XGMAC_IOREAD_BITS(pdata, DMA_DSR0, RPS);
+		if (dma_sr0 == 3 || dma_sr0 == 4)
+			break;
+		mdelay(1);
+	}
+	*/
 }
 
 static int xgbe_init(struct xgbe_prv_data *pdata)
