@@ -75,15 +75,16 @@
 #include <linux/of_device.h>
 #include <linux/uaccess.h>
 
-
 MODULE_AUTHOR("Tom Lendacky <thomas.lendacky@amd.com>");
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_VERSION("1.0.0-a");
+MODULE_VERSION("0.0.0-a");
 MODULE_DESCRIPTION("AMD 10GbE (amd-xgbe) PHY driver");
 
-#define XGBE_PHY_ID	0x000162d0
+#define XGBE_PHY_ID	0x7996ced0
 #define XGBE_PHY_MASK	0xfffffff0
 
+#define XGBE_PHY_SERDES_RETRY		32
+#define XGBE_PHY_CHANNEL_PROPERTY	"amd,serdes-channel"
 #define XGBE_PHY_SPEEDSET_PROPERTY	"amd,speed-set"
 
 #define XGBE_AN_INT_CMPLT		0x01
@@ -100,9 +101,11 @@ MODULE_DESCRIPTION("AMD 10GbE (amd-xgbe) PHY driver");
 #ifndef MDIO_PMA_10GBR_PMD_CTRL
 #define MDIO_PMA_10GBR_PMD_CTRL		0x0096
 #endif
+
 #ifndef MDIO_PMA_10GBR_FEC_CTRL
 #define MDIO_PMA_10GBR_FEC_CTRL		0x00ab
 #endif
+
 #ifndef MDIO_AN_XNP
 #define MDIO_AN_XNP			0x0016
 #endif
@@ -110,85 +113,23 @@ MODULE_DESCRIPTION("AMD 10GbE (amd-xgbe) PHY driver");
 #ifndef MDIO_AN_INTMASK
 #define MDIO_AN_INTMASK			0x8001
 #endif
+
 #ifndef MDIO_AN_INT
 #define MDIO_AN_INT			0x8002
+#endif
+
+#ifndef MDIO_AN_KR_CTRL
+#define MDIO_AN_KR_CTRL			0x8003
 #endif
 
 #ifndef MDIO_CTRL1_SPEED1G
 #define MDIO_CTRL1_SPEED1G		(MDIO_CTRL1_SPEED10G & ~BMCR_SPEED100)
 #endif
 
-/* SerDes integration register offsets */
-#define SIR0_KR_RT_1			0x002c
-#define SIR0_STATUS			0x0040
-#define SIR1_SPEED			0x0000
+#ifndef MDIO_KR_CTRL_PDETECT
+#define MDIO_KR_CTRL_PDETECT		0x01
+#endif
 
-/* SerDes integration register entry bit positions and sizes */
-#define SIR0_KR_RT_1_RESET_INDEX	11
-#define SIR0_KR_RT_1_RESET_WIDTH	1
-#define SIR0_STATUS_RX_READY_INDEX	0
-#define SIR0_STATUS_RX_READY_WIDTH	1
-#define SIR0_STATUS_TX_READY_INDEX	8
-#define SIR0_STATUS_TX_READY_WIDTH	1
-#define SIR1_SPEED_DATARATE_INDEX	4
-#define SIR1_SPEED_DATARATE_WIDTH	2
-#define SIR1_SPEED_PI_SPD_SEL_INDEX	12
-#define SIR1_SPEED_PI_SPD_SEL_WIDTH	4
-#define SIR1_SPEED_PLLSEL_INDEX		3
-#define SIR1_SPEED_PLLSEL_WIDTH		1
-#define SIR1_SPEED_RATECHANGE_INDEX	6
-#define SIR1_SPEED_RATECHANGE_WIDTH	1
-#define SIR1_SPEED_TXAMP_INDEX		8
-#define SIR1_SPEED_TXAMP_WIDTH		4
-#define SIR1_SPEED_WORDMODE_INDEX	0
-#define SIR1_SPEED_WORDMODE_WIDTH	3
-
-#define SPEED_10000_CDR			0x7
-#define SPEED_10000_PLL			0x1
-#define SPEED_10000_RATE		0x0
-#define SPEED_10000_TXAMP		0xa
-#define SPEED_10000_WORD		0x7
-
-#define SPEED_2500_CDR			0x2
-#define SPEED_2500_PLL			0x0
-#define SPEED_2500_RATE			0x1
-#define SPEED_2500_TXAMP		0xf
-#define SPEED_2500_WORD			0x1
-
-#define SPEED_1000_CDR			0x2
-#define SPEED_1000_PLL			0x0
-#define SPEED_1000_RATE			0x3
-#define SPEED_1000_TXAMP		0xf
-#define SPEED_1000_WORD			0x1
-
-
-/* SerDes RxTx register offsets */
-#define RXTX_REG20			0x0050
-#define RXTX_REG114			0x01c8
-
-/* SerDes RxTx register entry bit positions and sizes */
-#define RXTX_REG20_BLWC_ENA_INDEX	2
-#define RXTX_REG20_BLWC_ENA_WIDTH	1
-#define RXTX_REG114_PQ_REG_INDEX	9
-#define RXTX_REG114_PQ_REG_WIDTH	7
-
-#define RXTX_10000_BLWC			0
-#define RXTX_10000_PQ			0x1e
-
-#define RXTX_2500_BLWC			1
-#define RXTX_2500_PQ			0xa
-
-#define RXTX_1000_BLWC			1
-#define RXTX_1000_PQ			0xa
-
-/* Bit setting and getting macros
- *  The get macro will extract the current bit field value from within
- *  the variable
- *
- *  The set macro will clear the current bit field value within the
- *  variable and then set the bit field of the variable to the
- *  specified value
- */
 #define GET_BITS(_var, _index, _width)					\
 	(((_var) >> (_index)) & ((0x1 << (_width)) - 1))
 
@@ -198,71 +139,12 @@ do {									\
 	(_var) |= (((_val) & ((0x1 << (_width)) - 1)) << (_index));	\
 } while (0)
 
-#define XSIR_GET_BITS(_var, _prefix, _field)				\
-	GET_BITS((_var),						\
-		 _prefix##_##_field##_INDEX,				\
-		 _prefix##_##_field##_WIDTH)
+#define XCMU_IOREAD(_priv, _reg)					\
+	ioread16((_priv)->cmu_regs + _reg)
 
-#define XSIR_SET_BITS(_var, _prefix, _field, _val)			\
-	SET_BITS((_var),						\
-		 _prefix##_##_field##_INDEX,				\
-		 _prefix##_##_field##_WIDTH, (_val))
+#define XCMU_IOWRITE(_priv, _reg, _val)					\
+	iowrite16((_val), (_priv)->cmu_regs + _reg)
 
-/* Macros for reading or writing SerDes integration registers
- *  The ioread macros will get bit fields or full values using the
- *  register definitions formed using the input names
- *
- *  The iowrite macros will set bit fields or full values using the
- *  register definitions formed using the input names
- */
-#define XSIR0_IOREAD(_priv, _reg)					\
-	ioread16((_priv)->sir0_regs + _reg)
-
-#define XSIR0_IOREAD_BITS(_priv, _reg, _field)				\
-	GET_BITS(XSIR0_IOREAD((_priv), _reg),				\
-		 _reg##_##_field##_INDEX,				\
-		 _reg##_##_field##_WIDTH)
-
-#define XSIR0_IOWRITE(_priv, _reg, _val)				\
-	iowrite16((_val), (_priv)->sir0_regs + _reg)
-
-#define XSIR0_IOWRITE_BITS(_priv, _reg, _field, _val)			\
-do {									\
-	u16 reg_val = XSIR0_IOREAD((_priv), _reg);			\
-	SET_BITS(reg_val,						\
-		 _reg##_##_field##_INDEX,				\
-		 _reg##_##_field##_WIDTH, (_val));			\
-	XSIR0_IOWRITE((_priv), _reg, reg_val);				\
-} while (0)
-
-#define XSIR1_IOREAD(_priv, _reg)					\
-	ioread16((_priv)->sir1_regs + _reg)
-
-#define XSIR1_IOREAD_BITS(_priv, _reg, _field)				\
-	GET_BITS(XSIR1_IOREAD((_priv), _reg),				\
-		 _reg##_##_field##_INDEX,				\
-		 _reg##_##_field##_WIDTH)
-
-#define XSIR1_IOWRITE(_priv, _reg, _val)				\
-	iowrite16((_val), (_priv)->sir1_regs + _reg)
-
-#define XSIR1_IOWRITE_BITS(_priv, _reg, _field, _val)			\
-do {									\
-	u16 reg_val = XSIR1_IOREAD((_priv), _reg);			\
-	SET_BITS(reg_val,						\
-		 _reg##_##_field##_INDEX,				\
-		 _reg##_##_field##_WIDTH, (_val));			\
-	XSIR1_IOWRITE((_priv), _reg, reg_val);				\
-} while (0)
-
-
-/* Macros for reading or writing SerDes RxTx registers
- *  The ioread macros will get bit fields or full values using the
- *  register definitions formed using the input names
- *
- *  The iowrite macros will set bit fields or full values using the
- *  register definitions formed using the input names
- */
 #define XRXTX_IOREAD(_priv, _reg)					\
 	ioread16((_priv)->rxtx_regs + _reg)
 
@@ -283,6 +165,75 @@ do {									\
 	XRXTX_IOWRITE((_priv), _reg, reg_val);				\
 } while (0)
 
+/* SerDes CMU register offsets */
+#define CMU_REG15			0x003c
+#define CMU_REG16			0x0040
+
+/* SerDes CMU register entry bit positions and sizes */
+#define CMU_REG16_TX_RATE_CHANGE_BASE	15
+#define CMU_REG16_RX_RATE_CHANGE_BASE	14
+#define CMU_REG16_RATE_CHANGE_DECR	2
+
+/* SerDes RxTx register offsets */
+#define RXTX_REG2			0x0008
+#define RXTX_REG3			0x000c
+#define RXTX_REG5			0x0014
+#define RXTX_REG6			0x0018
+#define RXTX_REG20			0x0050
+#define RXTX_REG53			0x00d4
+#define RXTX_REG114			0x01c8
+#define RXTX_REG115			0x01cc
+#define RXTX_REG142			0x0238
+
+/* SerDes RxTx register entry bit positions and sizes */
+#define RXTX_REG2_RESETB_INDEX			15
+#define RXTX_REG2_RESETB_WIDTH			1
+#define RXTX_REG3_TX_DATA_RATE_INDEX		14
+#define RXTX_REG3_TX_DATA_RATE_WIDTH		2
+#define RXTX_REG3_TX_WORD_MODE_INDEX		11
+#define RXTX_REG3_TX_WORD_MODE_WIDTH		3
+#define RXTX_REG5_TXAMP_CNTL_INDEX		7
+#define RXTX_REG5_TXAMP_CNTL_WIDTH		4
+#define RXTX_REG6_RX_DATA_RATE_INDEX		9
+#define RXTX_REG6_RX_DATA_RATE_WIDTH		2
+#define RXTX_REG6_RX_WORD_MODE_INDEX		11
+#define RXTX_REG6_RX_WORD_MODE_WIDTH		3
+#define RXTX_REG20_BLWC_ENA_INDEX		2
+#define RXTX_REG20_BLWC_ENA_WIDTH		1
+#define RXTX_REG53_RX_PLLSELECT_INDEX		15
+#define RXTX_REG53_RX_PLLSELECT_WIDTH		1
+#define RXTX_REG53_TX_PLLSELECT_INDEX		14
+#define RXTX_REG53_TX_PLLSELECT_WIDTH		1
+#define RXTX_REG53_PI_SPD_SEL_CDR_INDEX		10
+#define RXTX_REG53_PI_SPD_SEL_CDR_WIDTH		4
+#define RXTX_REG114_PQ_REG_INDEX		9
+#define RXTX_REG114_PQ_REG_WIDTH		7
+#define RXTX_REG115_FORCE_LAT_CAL_START_INDEX	2
+#define RXTX_REG115_FORCE_LAT_CAL_START_WIDTH	1
+#define RXTX_REG115_FORCE_SUM_CAL_START_INDEX	1
+#define RXTX_REG115_FORCE_SUM_CAL_START_WIDTH	1
+#define RXTX_REG142_SUM_CALIB_DONE_INDEX	15
+#define RXTX_REG142_SUM_CALIB_DONE_WIDTH	1
+#define RXTX_REG142_SUM_CALIB_ERR_INDEX		14
+#define RXTX_REG142_SUM_CALIB_ERR_WIDTH		1
+#define RXTX_REG142_LAT_CALIB_DONE_INDEX	11
+#define RXTX_REG142_LAT_CALIB_DONE_WIDTH	1
+
+#define RXTX_FULL_RATE				0x0
+#define RXTX_HALF_RATE				0x1
+#define RXTX_FIFTH_RATE				0x3
+#define RXTX_66BIT_WORD				0x7
+#define RXTX_10BIT_WORD				0x1
+#define RXTX_10G_TX_AMP				0xa
+#define RXTX_1G_TX_AMP				0xf
+#define RXTX_10G_CDR				0x7
+#define RXTX_1G_CDR				0x2
+#define RXTX_10G_PLL				0x1
+#define RXTX_1G_PLL				0x0
+#define RXTX_10G_PQ				0x1e
+#define RXTX_1G_PQ				0xa
+
+DEFINE_SPINLOCK(cmu_lock);
 
 enum amd_xgbe_phy_an {
 	AMD_XGBE_AN_READY = 0,
@@ -321,18 +272,17 @@ struct amd_xgbe_phy_priv {
 
 	/* SerDes related mmio resources */
 	struct resource *rxtx_res;
-	struct resource *sir0_res;
-	struct resource *sir1_res;
+	struct resource *cmu_res;
 
 	/* SerDes related mmio registers */
 	void __iomem *rxtx_regs;	/* SerDes Rx/Tx CSRs */
-	void __iomem *sir0_regs;	/* SerDes integration registers (1/2) */
-	void __iomem *sir1_regs;	/* SerDes integration registers (2/2) */
+	void __iomem *cmu_regs;		/* SerDes CMU CSRs */
+
+	unsigned int serdes_channel;
+	unsigned int speed_set;
 
 	/* Maintain link status for re-starting auto-negotiation */
 	unsigned int link;
-	enum amd_xgbe_phy_mode mode;
-	unsigned int speed_set;
 
 	/* Auto-negotiation state machine support */
 	struct mutex an_mutex;
@@ -342,6 +292,7 @@ struct amd_xgbe_phy_priv {
 	enum amd_xgbe_phy_rx kx_state;
 	struct work_struct an_work;
 	struct workqueue_struct *an_workqueue;
+	unsigned int parallel_detect;
 };
 
 static int amd_xgbe_an_enable_kr_training(struct phy_device *phydev)
@@ -394,33 +345,51 @@ static int amd_xgbe_phy_pcs_power_cycle(struct phy_device *phydev)
 static void amd_xgbe_phy_serdes_start_ratechange(struct phy_device *phydev)
 {
 	struct amd_xgbe_phy_priv *priv = phydev->priv;
+	u16 val, mask;
 
-	/* Assert Rx and Tx ratechange */
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, RATECHANGE, 1);
+	/* Assert Rx and Tx ratechange in CMU_reg16 */
+	val = XCMU_IOREAD(priv, CMU_REG16);
+
+	mask = (1 << (CMU_REG16_TX_RATE_CHANGE_BASE -
+		      (priv->serdes_channel * CMU_REG16_RATE_CHANGE_DECR))) |
+	       (1 << (CMU_REG16_RX_RATE_CHANGE_BASE -
+		      (priv->serdes_channel * CMU_REG16_RATE_CHANGE_DECR)));
+	val |= mask;
+
+	XCMU_IOWRITE(priv, CMU_REG16, val);
 }
 
 static void amd_xgbe_phy_serdes_complete_ratechange(struct phy_device *phydev)
 {
 	struct amd_xgbe_phy_priv *priv = phydev->priv;
+	u16 val, mask;
 	unsigned int wait;
-	u16 status;
 
-	/* Release Rx and Tx ratechange */
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, RATECHANGE, 0);
+	/* Release Rx and Tx ratechange for proper channel in CMU_reg16 */
+	val = XCMU_IOREAD(priv, CMU_REG16);
 
-	/* Wait for Rx and Tx ready */
+	mask = (1 << (CMU_REG16_TX_RATE_CHANGE_BASE -
+		      (priv->serdes_channel * CMU_REG16_RATE_CHANGE_DECR))) |
+	       (1 << (CMU_REG16_RX_RATE_CHANGE_BASE -
+		      (priv->serdes_channel * CMU_REG16_RATE_CHANGE_DECR)));
+	val &= ~mask;
+
+	XCMU_IOWRITE(priv, CMU_REG16, val);
+
+	/* Wait for Rx and Tx ready in CMU_reg15 */
+	mask = (1 << priv->serdes_channel) |
+	       (1 << (priv->serdes_channel + 8));
 	wait = XGBE_PHY_RATECHANGE_COUNT;
 	while (wait--) {
-		usleep_range(50, 75);
+		udelay(50);
 
-		status = XSIR0_IOREAD(priv, SIR0_STATUS);
-		if (XSIR_GET_BITS(status, SIR0_STATUS, RX_READY) &&
-		    XSIR_GET_BITS(status, SIR0_STATUS, TX_READY))
+		val = XCMU_IOREAD(priv, CMU_REG15);
+		if ((val & mask) == mask)
 			return;
 	}
 
 	netdev_dbg(phydev->attached_dev, "SerDes rx/tx not ready (%#hx)\n",
-		   status);
+		   val);
 }
 
 static int amd_xgbe_phy_xgmii_mode(struct phy_device *phydev)
@@ -428,8 +397,8 @@ static int amd_xgbe_phy_xgmii_mode(struct phy_device *phydev)
 	struct amd_xgbe_phy_priv *priv = phydev->priv;
 	int ret;
 
-	/* Enable KR training */
-	ret = amd_xgbe_an_enable_kr_training(phydev);
+	/* Disable KR training */
+	ret = amd_xgbe_an_disable_kr_training(phydev);
 	if (ret < 0)
 		return ret;
 
@@ -455,20 +424,29 @@ static int amd_xgbe_phy_xgmii_mode(struct phy_device *phydev)
 		return ret;
 
 	/* Set SerDes to 10G speed */
+	spin_lock(&cmu_lock);
+
 	amd_xgbe_phy_serdes_start_ratechange(phydev);
 
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, DATARATE, SPEED_10000_RATE);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, WORDMODE, SPEED_10000_WORD);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, TXAMP, SPEED_10000_TXAMP);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PLLSEL, SPEED_10000_PLL);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PI_SPD_SEL, SPEED_10000_CDR);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_DATA_RATE, RXTX_FULL_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_WORD_MODE, RXTX_66BIT_WORD);
 
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, RXTX_10000_BLWC);
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_10000_PQ);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG5, TXAMP_CNTL, RXTX_10G_TX_AMP);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_DATA_RATE, RXTX_FULL_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_WORD_MODE, RXTX_66BIT_WORD);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, 0);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, RX_PLLSELECT, RXTX_10G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, TX_PLLSELECT, RXTX_10G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, PI_SPD_SEL_CDR, RXTX_10G_CDR);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_10G_PQ);
 
 	amd_xgbe_phy_serdes_complete_ratechange(phydev);
 
-	priv->mode = AMD_XGBE_MODE_KR;
+	spin_unlock(&cmu_lock);
 
 	return 0;
 }
@@ -505,20 +483,29 @@ static int amd_xgbe_phy_gmii_2500_mode(struct phy_device *phydev)
 		return ret;
 
 	/* Set SerDes to 2.5G speed */
+	spin_lock(&cmu_lock);
+
 	amd_xgbe_phy_serdes_start_ratechange(phydev);
 
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, DATARATE, SPEED_2500_RATE);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, WORDMODE, SPEED_2500_WORD);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, TXAMP, SPEED_2500_TXAMP);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PLLSEL, SPEED_2500_PLL);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PI_SPD_SEL, SPEED_2500_CDR);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_DATA_RATE, RXTX_HALF_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_WORD_MODE, RXTX_10BIT_WORD);
 
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, RXTX_2500_BLWC);
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_2500_PQ);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG5, TXAMP_CNTL, RXTX_1G_TX_AMP);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_DATA_RATE, RXTX_HALF_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_WORD_MODE, RXTX_10BIT_WORD);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, 1);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, RX_PLLSELECT, RXTX_1G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, TX_PLLSELECT, RXTX_1G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, PI_SPD_SEL_CDR, RXTX_1G_CDR);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_1G_PQ);
 
 	amd_xgbe_phy_serdes_complete_ratechange(phydev);
 
-	priv->mode = AMD_XGBE_MODE_KX;
+	spin_unlock(&cmu_lock);
 
 	return 0;
 }
@@ -555,22 +542,58 @@ static int amd_xgbe_phy_gmii_mode(struct phy_device *phydev)
 		return ret;
 
 	/* Set SerDes to 1G speed */
+	spin_lock(&cmu_lock);
+
 	amd_xgbe_phy_serdes_start_ratechange(phydev);
 
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, DATARATE, SPEED_1000_RATE);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, WORDMODE, SPEED_1000_WORD);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, TXAMP, SPEED_1000_TXAMP);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PLLSEL, SPEED_1000_PLL);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PI_SPD_SEL, SPEED_1000_CDR);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_DATA_RATE, RXTX_FIFTH_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_WORD_MODE, RXTX_10BIT_WORD);
 
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, RXTX_1000_BLWC);
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_1000_PQ);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG5, TXAMP_CNTL, RXTX_1G_TX_AMP);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_DATA_RATE, RXTX_FIFTH_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_WORD_MODE, RXTX_10BIT_WORD);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, 1);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, RX_PLLSELECT, RXTX_1G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, TX_PLLSELECT, RXTX_1G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, PI_SPD_SEL_CDR, RXTX_1G_CDR);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_1G_PQ);
 
 	amd_xgbe_phy_serdes_complete_ratechange(phydev);
 
-	priv->mode = AMD_XGBE_MODE_KX;
+	spin_unlock(&cmu_lock);
 
 	return 0;
+}
+
+static int amd_xgbe_phy_cur_mode(struct phy_device *phydev,
+				 enum amd_xgbe_phy_mode *mode)
+{
+	int ret;
+
+	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_CTRL2);
+	if (ret < 0)
+		return ret;
+
+	if ((ret & MDIO_PCS_CTRL2_TYPE) == MDIO_PCS_CTRL2_10GBR)
+		*mode = AMD_XGBE_MODE_KR;
+	else
+		*mode = AMD_XGBE_MODE_KX;
+
+	return 0;
+}
+
+static bool amd_xgbe_phy_in_kr_mode(struct phy_device *phydev)
+{
+	enum amd_xgbe_phy_mode mode;
+
+	if (amd_xgbe_phy_cur_mode(phydev, &mode))
+		return false;
+
+	return (mode == AMD_XGBE_MODE_KR);
 }
 
 static int amd_xgbe_phy_switch_mode(struct phy_device *phydev)
@@ -579,7 +602,7 @@ static int amd_xgbe_phy_switch_mode(struct phy_device *phydev)
 	int ret;
 
 	/* If we are in KR switch to KX, and vice-versa */
-	if (priv->mode == AMD_XGBE_MODE_KR) {
+	if (amd_xgbe_phy_in_kr_mode(phydev)) {
 		if (priv->speed_set == AMD_XGBE_PHY_SPEEDSET_1000_10000)
 			ret = amd_xgbe_phy_gmii_mode(phydev);
 		else
@@ -591,27 +614,31 @@ static int amd_xgbe_phy_switch_mode(struct phy_device *phydev)
 	return ret;
 }
 
-static enum amd_xgbe_phy_an amd_xgbe_an_switch_mode(struct phy_device *phydev)
+static int amd_xgbe_phy_set_mode(struct phy_device *phydev,
+				 enum amd_xgbe_phy_mode mode)
 {
+	enum amd_xgbe_phy_mode cur_mode;
 	int ret;
 
-	ret = amd_xgbe_phy_switch_mode(phydev);
-	if (ret < 0)
-		return AMD_XGBE_AN_ERROR;
+	ret = amd_xgbe_phy_cur_mode(phydev, &cur_mode);
+	if (ret)
+		return ret;
 
-	return AMD_XGBE_AN_START;
+	if (mode != cur_mode)
+		ret = amd_xgbe_phy_switch_mode(phydev);
+
+	return ret;
 }
 
 static enum amd_xgbe_phy_an amd_xgbe_an_tx_training(struct phy_device *phydev,
 						    enum amd_xgbe_phy_rx *state)
 {
-	struct amd_xgbe_phy_priv *priv = phydev->priv;
 	int ad_reg, lp_reg, ret;
 
 	*state = AMD_XGBE_RX_COMPLETE;
 
-	/* If we're in KX mode then we're done */
-	if (priv->mode == AMD_XGBE_MODE_KX)
+	/* If we're not in KR mode then we're done */
+	if (!amd_xgbe_phy_in_kr_mode(phydev))
 		return AMD_XGBE_AN_EVENT;
 
 	/* Enable/Disable FEC */
@@ -639,12 +666,8 @@ static enum amd_xgbe_phy_an amd_xgbe_an_tx_training(struct phy_device *phydev,
 	if (ret < 0)
 		return AMD_XGBE_AN_ERROR;
 
-	XSIR0_IOWRITE_BITS(priv, SIR0_KR_RT_1, RESET, 1);
-
 	ret |= 0x01;
 	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_PMA_10GBR_PMD_CTRL, ret);
-
-	XSIR0_IOWRITE_BITS(priv, SIR0_KR_RT_1, RESET, 0);
 
 	return AMD_XGBE_AN_EVENT;
 }
@@ -669,7 +692,6 @@ static enum amd_xgbe_phy_an amd_xgbe_an_tx_xnp(struct phy_device *phydev,
 static enum amd_xgbe_phy_an amd_xgbe_an_rx_bpa(struct phy_device *phydev,
 					       enum amd_xgbe_phy_rx *state)
 {
-	struct amd_xgbe_phy_priv *priv = phydev->priv;
 	unsigned int link_support;
 	int ret, ad_reg, lp_reg;
 
@@ -679,9 +701,9 @@ static enum amd_xgbe_phy_an amd_xgbe_an_rx_bpa(struct phy_device *phydev,
 		return AMD_XGBE_AN_ERROR;
 
 	/* Check for a supported mode, otherwise restart in a different one */
-	link_support = (priv->mode == AMD_XGBE_MODE_KR) ? 0x80 : 0x20;
+	link_support = amd_xgbe_phy_in_kr_mode(phydev) ? 0x80 : 0x20;
 	if (!(ret & link_support))
-		return amd_xgbe_an_switch_mode(phydev);
+		return AMD_XGBE_AN_INCOMPAT_LINK;
 
 	/* Check Extended Next Page support */
 	ad_reg = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_AN_ADVERTISE);
@@ -722,7 +744,7 @@ static enum amd_xgbe_phy_an amd_xgbe_an_start(struct phy_device *phydev)
 	int ret;
 
 	/* Be sure we aren't looping trying to negotiate */
-	if (priv->mode == AMD_XGBE_MODE_KR) {
+	if (amd_xgbe_phy_in_kr_mode(phydev)) {
 		if (priv->kr_state != AMD_XGBE_RX_READY)
 			return AMD_XGBE_AN_NO_LINK;
 		priv->kr_state = AMD_XGBE_RX_BPA;
@@ -785,6 +807,13 @@ static enum amd_xgbe_phy_an amd_xgbe_an_start(struct phy_device *phydev)
 	/* Enable and start auto-negotiation */
 	phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_AN_INT, 0);
 
+	ret = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_AN_KR_CTRL);
+	if (ret < 0)
+		return AMD_XGBE_AN_ERROR;
+
+	ret |= MDIO_KR_CTRL_PDETECT;
+	phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_AN_KR_CTRL, ret);
+
 	ret = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_CTRL1);
 	if (ret < 0)
 		return AMD_XGBE_AN_ERROR;
@@ -825,8 +854,8 @@ static enum amd_xgbe_phy_an amd_xgbe_an_page_received(struct phy_device *phydev)
 	enum amd_xgbe_phy_rx *state;
 	int ret;
 
-	state = (priv->mode == AMD_XGBE_MODE_KR) ? &priv->kr_state
-						 : &priv->kx_state;
+	state = amd_xgbe_phy_in_kr_mode(phydev) ? &priv->kr_state
+						: &priv->kx_state;
 
 	switch (*state) {
 	case AMD_XGBE_RX_BPA:
@@ -846,7 +875,13 @@ static enum amd_xgbe_phy_an amd_xgbe_an_page_received(struct phy_device *phydev)
 
 static enum amd_xgbe_phy_an amd_xgbe_an_incompat_link(struct phy_device *phydev)
 {
-	return amd_xgbe_an_switch_mode(phydev);
+	int ret;
+
+	ret = amd_xgbe_phy_switch_mode(phydev);
+	if (ret)
+		return AMD_XGBE_AN_ERROR;
+
+	return AMD_XGBE_AN_START;
 }
 
 static void amd_xgbe_an_state_machine(struct work_struct *work)
@@ -859,6 +894,10 @@ static void amd_xgbe_an_state_machine(struct work_struct *work)
 	int sleep;
 	unsigned int an_supported = 0;
 
+	/* Start in KX mode */
+	if (amd_xgbe_phy_set_mode(phydev, AMD_XGBE_MODE_KX))
+		priv->an_state = AMD_XGBE_AN_ERROR;
+
 	while (1) {
 		mutex_lock(&priv->an_mutex);
 
@@ -866,8 +905,9 @@ static void amd_xgbe_an_state_machine(struct work_struct *work)
 
 		switch (priv->an_state) {
 		case AMD_XGBE_AN_START:
-			priv->an_state = amd_xgbe_an_start(phydev);
 			an_supported = 0;
+			priv->parallel_detect = 0;
+			priv->an_state = amd_xgbe_an_start(phydev);
 			break;
 
 		case AMD_XGBE_AN_EVENT:
@@ -884,6 +924,7 @@ static void amd_xgbe_an_state_machine(struct work_struct *work)
 			break;
 
 		case AMD_XGBE_AN_COMPLETE:
+			priv->parallel_detect = an_supported ? 0 : 1;
 			netdev_info(phydev->attached_dev, "%s successful\n",
 				    an_supported ? "Auto negotiation"
 						 : "Parallel detection");
@@ -1018,7 +1059,6 @@ static int amd_xgbe_phy_config_aneg(struct phy_device *phydev)
 {
 	struct amd_xgbe_phy_priv *priv = phydev->priv;
 	u32 mmd_mask = phydev->c45_ids.devices_in_package;
-	int ret;
 
 	if (phydev->autoneg != AUTONEG_ENABLE)
 		return amd_xgbe_phy_setup_forced(phydev);
@@ -1026,11 +1066,6 @@ static int amd_xgbe_phy_config_aneg(struct phy_device *phydev)
 	/* Make sure we have the AN MMD present */
 	if (!(mmd_mask & MDIO_DEVS_AN))
 		return -EINVAL;
-
-	/* Get the current speed mode */
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_CTRL2);
-	if (ret < 0)
-		return ret;
 
 	/* Start/Restart the auto-negotiation state machine */
 	mutex_lock(&priv->an_mutex);
@@ -1121,18 +1156,14 @@ static int amd_xgbe_phy_read_status(struct phy_device *phydev)
 {
 	struct amd_xgbe_phy_priv *priv = phydev->priv;
 	u32 mmd_mask = phydev->c45_ids.devices_in_package;
-	int ret, mode, ad_ret, lp_ret;
+	int ret, ad_ret, lp_ret;
 
 	ret = amd_xgbe_phy_update_link(phydev);
 	if (ret)
 		return ret;
 
-	mode = phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_CTRL2);
-	if (mode < 0)
-		return mode;
-	mode &= MDIO_PCS_CTRL2_TYPE;
-
-	if (phydev->autoneg == AUTONEG_ENABLE) {
+	if ((phydev->autoneg == AUTONEG_ENABLE) &&
+	    !priv->parallel_detect) {
 		if (!(mmd_mask & MDIO_DEVS_AN))
 			return -EINVAL;
 
@@ -1163,40 +1194,39 @@ static int amd_xgbe_phy_read_status(struct phy_device *phydev)
 		ad_ret &= lp_ret;
 		if (ad_ret & 0x80) {
 			phydev->speed = SPEED_10000;
-			if (mode != MDIO_PCS_CTRL2_10GBR) {
-				ret = amd_xgbe_phy_xgmii_mode(phydev);
-				if (ret < 0)
-					return ret;
-			}
+			ret = amd_xgbe_phy_set_mode(phydev, AMD_XGBE_MODE_KR);
+			if (ret)
+				return ret;
 		} else {
-			int (*mode_fcn)(struct phy_device *);
-
-			if (priv->speed_set ==
-			    AMD_XGBE_PHY_SPEEDSET_1000_10000) {
+			switch (priv->speed_set) {
+			case AMD_XGBE_PHY_SPEEDSET_1000_10000:
 				phydev->speed = SPEED_1000;
-				mode_fcn = amd_xgbe_phy_gmii_mode;
-			} else {
+				break;
+
+			case AMD_XGBE_PHY_SPEEDSET_2500_10000:
 				phydev->speed = SPEED_2500;
-				mode_fcn = amd_xgbe_phy_gmii_2500_mode;
+				break;
 			}
 
-			if (mode == MDIO_PCS_CTRL2_10GBR) {
-				ret = mode_fcn(phydev);
-				if (ret < 0)
-					return ret;
-			}
+			ret = amd_xgbe_phy_set_mode(phydev, AMD_XGBE_MODE_KX);
+			if (ret)
+				return ret;
 		}
 
 		phydev->duplex = DUPLEX_FULL;
 	} else {
-		if (mode == MDIO_PCS_CTRL2_10GBR) {
+		if (amd_xgbe_phy_in_kr_mode(phydev)) {
 			phydev->speed = SPEED_10000;
 		} else {
-			if (priv->speed_set ==
-			    AMD_XGBE_PHY_SPEEDSET_1000_10000)
+			switch (priv->speed_set) {
+			case AMD_XGBE_PHY_SPEEDSET_1000_10000:
 				phydev->speed = SPEED_1000;
-			else
+				break;
+
+			case AMD_XGBE_PHY_SPEEDSET_2500_10000:
 				phydev->speed = SPEED_2500;
+				break;
+			}
 		}
 		phydev->duplex = DUPLEX_FULL;
 		phydev->pause = 0;
@@ -1291,21 +1321,33 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 		goto err_priv;
 	}
 
-	priv->sir0_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	priv->sir0_regs = devm_ioremap_resource(dev, priv->sir0_res);
-	if (IS_ERR(priv->sir0_regs)) {
-		dev_err(dev, "sir0 ioremap failed\n");
-		ret = PTR_ERR(priv->sir0_regs);
+	/* All xgbe phy devices share the CMU registers so retrieve
+	 * the resource and do the ioremap directly rather than
+	 * the devm_ioremap_resource call
+	 */
+	priv->cmu_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!priv->cmu_res) {
+		dev_err(dev, "cmu invalid resource\n");
+		ret = -EINVAL;
+		goto err_rxtx;
+	}
+	priv->cmu_regs = devm_ioremap_nocache(dev, priv->cmu_res->start,
+					      resource_size(priv->cmu_res));
+	if (!priv->cmu_regs) {
+		dev_err(dev, "cmu ioremap failed\n");
+		ret = -ENOMEM;
 		goto err_rxtx;
 	}
 
-	priv->sir1_res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
-	priv->sir1_regs = devm_ioremap_resource(dev, priv->sir1_res);
-	if (IS_ERR(priv->sir1_regs)) {
-		dev_err(dev, "sir1 ioremap failed\n");
-		ret = PTR_ERR(priv->sir1_regs);
-		goto err_sir0;
+	/* Get the device serdes channel property */
+	property = of_get_property(dev->of_node, XGBE_PHY_CHANNEL_PROPERTY,
+				   NULL);
+	if (!property) {
+		dev_err(dev, "unable to obtain serdes_channel property\n");
+		ret = -EINVAL;
+		goto err_cmu;
 	}
+	priv->serdes_channel = be32_to_cpu(*property);
 
 	/* Get the device speed set property */
 	speed_set = 0;
@@ -1324,25 +1366,17 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 	default:
 		dev_err(dev, "invalid amd,speed-set property\n");
 		ret = -EINVAL;
-		goto err_sir1;
+		goto err_cmu;
 	}
 
 	priv->link = 1;
-
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_CTRL2);
-	if (ret < 0)
-		goto err_sir1;
-	if ((ret & MDIO_PCS_CTRL2_TYPE) == MDIO_PCS_CTRL2_10GBR)
-		priv->mode = AMD_XGBE_MODE_KR;
-	else
-		priv->mode = AMD_XGBE_MODE_KX;
 
 	mutex_init(&priv->an_mutex);
 	INIT_WORK(&priv->an_work, amd_xgbe_an_state_machine);
 	priv->an_workqueue = create_singlethread_workqueue(wq_name);
 	if (!priv->an_workqueue) {
 		ret = -ENOMEM;
-		goto err_sir1;
+		goto err_cmu;
 	}
 
 	phydev->priv = priv;
@@ -1352,15 +1386,8 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 
 	return 0;
 
-err_sir1:
-	devm_iounmap(dev, priv->sir1_regs);
-	devm_release_mem_region(dev, priv->sir1_res->start,
-				resource_size(priv->sir1_res));
-
-err_sir0:
-	devm_iounmap(dev, priv->sir0_regs);
-	devm_release_mem_region(dev, priv->sir0_res->start,
-				resource_size(priv->sir0_res));
+err_cmu:
+	devm_iounmap(dev, priv->cmu_regs);
 
 err_rxtx:
 	devm_iounmap(dev, priv->rxtx_regs);
@@ -1392,14 +1419,7 @@ static void amd_xgbe_phy_remove(struct phy_device *phydev)
 	flush_workqueue(priv->an_workqueue);
 	destroy_workqueue(priv->an_workqueue);
 
-	/* Release resources */
-	devm_iounmap(dev, priv->sir1_regs);
-	devm_release_mem_region(dev, priv->sir1_res->start,
-				resource_size(priv->sir1_res));
-
-	devm_iounmap(dev, priv->sir0_regs);
-	devm_release_mem_region(dev, priv->sir0_res->start,
-				resource_size(priv->sir0_res));
+	devm_iounmap(dev, priv->cmu_regs);
 
 	devm_iounmap(dev, priv->rxtx_regs);
 	devm_release_mem_region(dev, priv->rxtx_res->start,
