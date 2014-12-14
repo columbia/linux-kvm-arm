@@ -74,6 +74,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_device.h>
 #include <linux/uaccess.h>
+#include <linux/acpi.h>
 
 MODULE_AUTHOR("Tom Lendacky <thomas.lendacky@amd.com>");
 MODULE_LICENSE("Dual BSD/GPL");
@@ -260,12 +261,13 @@ enum amd_xgbe_phy_mode {
 };
 
 enum amd_xgbe_phy_speedset {
-	AMD_XGBE_PHY_SPEEDSET_1000_10000,
+	AMD_XGBE_PHY_SPEEDSET_1000_10000 = 0,
 	AMD_XGBE_PHY_SPEEDSET_2500_10000,
 };
 
 struct amd_xgbe_phy_priv {
 	struct platform_device *pdev;
+	struct acpi_device *adev;
 	struct device *dev;
 
 	struct phy_device *phydev;
@@ -1278,54 +1280,28 @@ unlock:
 	return ret;
 }
 
-static int amd_xgbe_phy_probe(struct phy_device *phydev)
+static int amd_xgbe_phy_map_resources(struct amd_xgbe_phy_priv *priv,
+				      struct platform_device *phy_pdev,
+				      unsigned int phy_resnum)
 {
-	struct amd_xgbe_phy_priv *priv;
-	struct platform_device *pdev;
-	struct device *dev;
-	char *wq_name;
-	const __be32 *property;
-	unsigned int speed_set;
+	struct device *dev = priv->dev;
 	int ret;
 
-	if (!phydev->dev.of_node)
-		return -EINVAL;
-
-	pdev = of_find_device_by_node(phydev->dev.of_node);
-	if (!pdev)
-		return -EINVAL;
-	dev = &pdev->dev;
-
-	wq_name = kasprintf(GFP_KERNEL, "%s-amd-xgbe-phy", phydev->bus->name);
-	if (!wq_name) {
-		ret = -ENOMEM;
-		goto err_pdev;
-	}
-
-	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv) {
-		ret = -ENOMEM;
-		goto err_name;
-	}
-
-	priv->pdev = pdev;
-	priv->dev = dev;
-	priv->phydev = phydev;
-
 	/* Get the device mmio areas */
-	priv->rxtx_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	priv->rxtx_res = platform_get_resource(phy_pdev, IORESOURCE_MEM,
+					       phy_resnum++);
 	priv->rxtx_regs = devm_ioremap_resource(dev, priv->rxtx_res);
 	if (IS_ERR(priv->rxtx_regs)) {
 		dev_err(dev, "rxtx ioremap failed\n");
-		ret = PTR_ERR(priv->rxtx_regs);
-		goto err_priv;
+		return PTR_ERR(priv->rxtx_regs);
 	}
 
 	/* All xgbe phy devices share the CMU registers so retrieve
 	 * the resource and do the ioremap directly rather than
 	 * the devm_ioremap_resource call
 	 */
-	priv->cmu_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	priv->cmu_res = platform_get_resource(phy_pdev, IORESOURCE_MEM,
+					      phy_resnum++);
 	if (!priv->cmu_res) {
 		dev_err(dev, "cmu invalid resource\n");
 		ret = -EINVAL;
@@ -1339,34 +1315,180 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 		goto err_rxtx;
 	}
 
+	return 0;
+
+err_rxtx:
+	devm_iounmap(dev, priv->rxtx_regs);
+	devm_release_mem_region(dev, priv->rxtx_res->start,
+				resource_size(priv->rxtx_res));
+
+	return ret;
+}
+
+static void amd_xgbe_phy_unmap_resources(struct amd_xgbe_phy_priv *priv)
+{
+	struct device *dev = priv->dev;
+
+	devm_iounmap(dev, priv->cmu_regs);
+
+	devm_iounmap(dev, priv->rxtx_regs);
+	devm_release_mem_region(dev, priv->rxtx_res->start,
+				resource_size(priv->rxtx_res));
+}
+
+#ifdef CONFIG_ACPI
+static int amd_xgbe_phy_acpi_support(struct amd_xgbe_phy_priv *priv)
+{
+	struct platform_device *phy_pdev = priv->pdev;
+	struct acpi_device *adev = priv->adev;
+	struct device *dev = priv->dev;
+	const union acpi_object *property;
+	int ret;
+
+	/* Map the memory resources */
+	ret = amd_xgbe_phy_map_resources(priv, phy_pdev, 2);
+	if (ret)
+		return ret;
+
 	/* Get the device serdes channel property */
-	property = of_get_property(dev->of_node, XGBE_PHY_CHANNEL_PROPERTY,
-				   NULL);
-	if (!property) {
-		dev_err(dev, "unable to obtain serdes_channel property\n");
+	ret = acpi_dev_get_property(adev, XGBE_PHY_CHANNEL_PROPERTY,
+				    ACPI_TYPE_INTEGER, &property);
+	if (ret) {
+		dev_err(dev, "unable to obtain %s acpi property\n",
+			XGBE_PHY_CHANNEL_PROPERTY);
+		goto err_resources;
+	}
+	priv->serdes_channel = property->integer.value;
+
+	/* Get the device speed set property */
+	ret = acpi_dev_get_property(adev, XGBE_PHY_SPEEDSET_PROPERTY,
+				    ACPI_TYPE_INTEGER, &property);
+	if (ret) {
+		dev_err(dev, "unable to obtain %s acpi property\n",
+			XGBE_PHY_SPEEDSET_PROPERTY);
+		goto err_resources;
+	}
+	priv->speed_set = property->integer.value;
+
+	return 0;
+
+err_resources:
+	amd_xgbe_phy_unmap_resources(priv);
+
+	return ret;
+}
+#else	/* CONFIG_ACPI */
+static int amd_xgbe_phy_acpi_support(struct amd_xgbe_phy_priv *priv)
+{
+	return -EINVAL;
+}
+#endif	/* CONFIG_ACPI */
+
+#ifdef CONFIG_OF
+static int amd_xgbe_phy_of_support(struct amd_xgbe_phy_priv *priv)
+{
+	struct platform_device *phy_pdev;
+	struct device_node *bus_node;
+	struct device_node *phy_node;
+	struct device *dev = priv->dev;
+	const __be32 *property;
+	int ret;
+
+	bus_node = priv->dev->of_node;
+	phy_node = of_parse_phandle(bus_node, "phy-handle", 0);
+	if (!phy_node) {
+		dev_err(dev, "unable to parse phy-handle\n");
+		return -EINVAL;
+	}
+
+	phy_pdev = of_find_device_by_node(phy_node);
+	if (!phy_pdev) {
+		dev_err(dev, "unable to obtain phy device\n");
 		ret = -EINVAL;
-		goto err_cmu;
+		goto err_put;
+	}
+
+	/* Map the memory resources */
+	ret = amd_xgbe_phy_map_resources(priv, phy_pdev, 0);
+	if (ret)
+		goto err_put;
+
+	/* Get the device serdes channel property */
+	property = of_get_property(phy_node, XGBE_PHY_CHANNEL_PROPERTY, NULL);
+	if (!property) {
+		dev_err(dev, "unable to obtain %s property\n",
+			XGBE_PHY_CHANNEL_PROPERTY);
+		ret = -EINVAL;
+		goto err_resources;
 	}
 	priv->serdes_channel = be32_to_cpu(*property);
 
 	/* Get the device speed set property */
-	speed_set = 0;
-	property = of_get_property(dev->of_node, XGBE_PHY_SPEEDSET_PROPERTY,
-				   NULL);
+	property = of_get_property(phy_node, XGBE_PHY_SPEEDSET_PROPERTY, NULL);
 	if (property)
-		speed_set = be32_to_cpu(*property);
+		priv->speed_set = be32_to_cpu(*property);
 
-	switch (speed_set) {
-	case 0:
-		priv->speed_set = AMD_XGBE_PHY_SPEEDSET_1000_10000;
-		break;
-	case 1:
-		priv->speed_set = AMD_XGBE_PHY_SPEEDSET_2500_10000;
+	of_node_put(phy_node);
+
+	return 0;
+
+err_resources:
+	amd_xgbe_phy_unmap_resources(priv);
+
+err_put:
+	of_node_put(phy_node);
+
+	return ret;
+}
+#else	/* CONFIG_OF */
+static int amd_xgbe_phy_of_support(struct amd_xgbe_phy_priv *priv)
+{
+	return -EINVAL;
+}
+#endif	/* CONFIG_OF */
+
+static int amd_xgbe_phy_probe(struct phy_device *phydev)
+{
+	struct amd_xgbe_phy_priv *priv;
+	struct device *dev;
+	char *wq_name;
+	int ret;
+
+	if (!phydev->bus || !phydev->bus->parent)
+		return -EINVAL;
+
+	dev = phydev->bus->parent;
+
+	wq_name = kasprintf(GFP_KERNEL, "%s-amd-xgbe-phy", phydev->bus->name);
+	if (!wq_name)
+		return -ENOMEM;
+
+	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+	if (!priv) {
+		ret = -ENOMEM;
+		goto err_name;
+	}
+
+	priv->pdev = to_platform_device(dev);
+	priv->adev = ACPI_COMPANION(dev);
+	priv->dev = dev;
+	priv->phydev = phydev;
+
+	if (priv->adev && !acpi_disabled)
+		ret = amd_xgbe_phy_acpi_support(priv);
+	else
+		ret = amd_xgbe_phy_of_support(priv);
+	if (ret)
+		goto err_priv;
+
+	switch (priv->speed_set) {
+	case AMD_XGBE_PHY_SPEEDSET_1000_10000:
+	case AMD_XGBE_PHY_SPEEDSET_2500_10000:
 		break;
 	default:
 		dev_err(dev, "invalid amd,speed-set property\n");
 		ret = -EINVAL;
-		goto err_cmu;
+		goto err_resources;
 	}
 
 	priv->link = 1;
@@ -1376,32 +1498,23 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 	priv->an_workqueue = create_singlethread_workqueue(wq_name);
 	if (!priv->an_workqueue) {
 		ret = -ENOMEM;
-		goto err_cmu;
+		goto err_resources;
 	}
 
 	phydev->priv = priv;
 
 	kfree(wq_name);
-	of_dev_put(pdev);
 
 	return 0;
 
-err_cmu:
-	devm_iounmap(dev, priv->cmu_regs);
-
-err_rxtx:
-	devm_iounmap(dev, priv->rxtx_regs);
-	devm_release_mem_region(dev, priv->rxtx_res->start,
-				resource_size(priv->rxtx_res));
+err_resources:
+	amd_xgbe_phy_unmap_resources(priv);
 
 err_priv:
 	devm_kfree(dev, priv);
 
 err_name:
 	kfree(wq_name);
-
-err_pdev:
-	of_dev_put(pdev);
 
 	return ret;
 }
@@ -1419,11 +1532,7 @@ static void amd_xgbe_phy_remove(struct phy_device *phydev)
 	flush_workqueue(priv->an_workqueue);
 	destroy_workqueue(priv->an_workqueue);
 
-	devm_iounmap(dev, priv->cmu_regs);
-
-	devm_iounmap(dev, priv->rxtx_regs);
-	devm_release_mem_region(dev, priv->rxtx_res->start,
-				resource_size(priv->rxtx_res));
+	amd_xgbe_phy_unmap_resources(priv);
 
 	devm_kfree(dev, priv);
 }
