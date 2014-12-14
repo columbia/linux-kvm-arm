@@ -77,12 +77,14 @@
 
 MODULE_AUTHOR("Tom Lendacky <thomas.lendacky@amd.com>");
 MODULE_LICENSE("Dual BSD/GPL");
-MODULE_VERSION("1.0.0-a");
+MODULE_VERSION("0.0.0-a");
 MODULE_DESCRIPTION("AMD 10GbE (amd-xgbe) PHY driver");
 
-#define XGBE_PHY_ID	0x000162d0
+#define XGBE_PHY_ID	0x7996ced0
 #define XGBE_PHY_MASK	0xfffffff0
 
+#define XGBE_PHY_SERDES_RETRY		32
+#define XGBE_PHY_CHANNEL_PROPERTY	"amd,serdes-channel"
 #define XGBE_PHY_SPEEDSET_PROPERTY	"amd,speed-set"
 
 #define XGBE_AN_INT_CMPLT		0x01
@@ -190,14 +192,6 @@ MODULE_DESCRIPTION("AMD 10GbE (amd-xgbe) PHY driver");
 #define RXTX_1000_BLWC			1
 #define RXTX_1000_PQ			0xa
 
-/* Bit setting and getting macros
- *  The get macro will extract the current bit field value from within
- *  the variable
- *
- *  The set macro will clear the current bit field value within the
- *  variable and then set the bit field of the variable to the
- *  specified value
- */
 #define GET_BITS(_var, _index, _width)					\
 	(((_var) >> (_index)) & ((0x1 << (_width)) - 1))
 
@@ -207,62 +201,11 @@ do {									\
 	(_var) |= (((_val) & ((0x1 << (_width)) - 1)) << (_index));	\
 } while (0)
 
-#define XSIR_GET_BITS(_var, _prefix, _field)				\
-	GET_BITS((_var),						\
-		 _prefix##_##_field##_INDEX,				\
-		 _prefix##_##_field##_WIDTH)
+#define XCMU_IOREAD(_priv, _reg)					\
+	ioread16((_priv)->cmu_regs + _reg)
 
-#define XSIR_SET_BITS(_var, _prefix, _field, _val)			\
-	SET_BITS((_var),						\
-		 _prefix##_##_field##_INDEX,				\
-		 _prefix##_##_field##_WIDTH, (_val))
-
-/* Macros for reading or writing SerDes integration registers
- *  The ioread macros will get bit fields or full values using the
- *  register definitions formed using the input names
- *
- *  The iowrite macros will set bit fields or full values using the
- *  register definitions formed using the input names
- */
-#define XSIR0_IOREAD(_priv, _reg)					\
-	ioread16((_priv)->sir0_regs + _reg)
-
-#define XSIR0_IOREAD_BITS(_priv, _reg, _field)				\
-	GET_BITS(XSIR0_IOREAD((_priv), _reg),				\
-		 _reg##_##_field##_INDEX,				\
-		 _reg##_##_field##_WIDTH)
-
-#define XSIR0_IOWRITE(_priv, _reg, _val)				\
-	iowrite16((_val), (_priv)->sir0_regs + _reg)
-
-#define XSIR0_IOWRITE_BITS(_priv, _reg, _field, _val)			\
-do {									\
-	u16 reg_val = XSIR0_IOREAD((_priv), _reg);			\
-	SET_BITS(reg_val,						\
-		 _reg##_##_field##_INDEX,				\
-		 _reg##_##_field##_WIDTH, (_val));			\
-	XSIR0_IOWRITE((_priv), _reg, reg_val);				\
-} while (0)
-
-#define XSIR1_IOREAD(_priv, _reg)					\
-	ioread16((_priv)->sir1_regs + _reg)
-
-#define XSIR1_IOREAD_BITS(_priv, _reg, _field)				\
-	GET_BITS(XSIR1_IOREAD((_priv), _reg),				\
-		 _reg##_##_field##_INDEX,				\
-		 _reg##_##_field##_WIDTH)
-
-#define XSIR1_IOWRITE(_priv, _reg, _val)				\
-	iowrite16((_val), (_priv)->sir1_regs + _reg)
-
-#define XSIR1_IOWRITE_BITS(_priv, _reg, _field, _val)			\
-do {									\
-	u16 reg_val = XSIR1_IOREAD((_priv), _reg);			\
-	SET_BITS(reg_val,						\
-		 _reg##_##_field##_INDEX,				\
-		 _reg##_##_field##_WIDTH, (_val));			\
-	XSIR1_IOWRITE((_priv), _reg, reg_val);				\
-} while (0)
+#define XCMU_IOWRITE(_priv, _reg, _val)					\
+	iowrite16((_val), (_priv)->cmu_regs + _reg)
 
 /* Macros for reading or writing SerDes RxTx registers
  *  The ioread macros will get bit fields or full values using the
@@ -290,6 +233,74 @@ do {									\
 		 _reg##_##_field##_WIDTH, (_val));			\
 	XRXTX_IOWRITE((_priv), _reg, reg_val);				\
 } while (0)
+
+/* SerDes CMU register offsets */
+#define CMU_REG15			0x003c
+#define CMU_REG16			0x0040
+
+/* SerDes CMU register entry bit positions and sizes */
+#define CMU_REG16_TX_RATE_CHANGE_BASE	15
+#define CMU_REG16_RX_RATE_CHANGE_BASE	14
+#define CMU_REG16_RATE_CHANGE_DECR	2
+
+/* SerDes RxTx register offsets */
+#define RXTX_REG2			0x0008
+#define RXTX_REG3			0x000c
+#define RXTX_REG5			0x0014
+#define RXTX_REG6			0x0018
+#define RXTX_REG53			0x00d4
+#define RXTX_REG115			0x01cc
+#define RXTX_REG142			0x0238
+
+/* SerDes RxTx register entry bit positions and sizes */
+#define RXTX_REG2_RESETB_INDEX			15
+#define RXTX_REG2_RESETB_WIDTH			1
+#define RXTX_REG3_TX_DATA_RATE_INDEX		14
+#define RXTX_REG3_TX_DATA_RATE_WIDTH		2
+#define RXTX_REG3_TX_WORD_MODE_INDEX		11
+#define RXTX_REG3_TX_WORD_MODE_WIDTH		3
+#define RXTX_REG5_TXAMP_CNTL_INDEX		7
+#define RXTX_REG5_TXAMP_CNTL_WIDTH		4
+#define RXTX_REG6_RX_DATA_RATE_INDEX		9
+#define RXTX_REG6_RX_DATA_RATE_WIDTH		2
+#define RXTX_REG6_RX_WORD_MODE_INDEX		11
+#define RXTX_REG6_RX_WORD_MODE_WIDTH		3
+#define RXTX_REG20_BLWC_ENA_INDEX		2
+#define RXTX_REG20_BLWC_ENA_WIDTH		1
+#define RXTX_REG53_RX_PLLSELECT_INDEX		15
+#define RXTX_REG53_RX_PLLSELECT_WIDTH		1
+#define RXTX_REG53_TX_PLLSELECT_INDEX		14
+#define RXTX_REG53_TX_PLLSELECT_WIDTH		1
+#define RXTX_REG53_PI_SPD_SEL_CDR_INDEX		10
+#define RXTX_REG53_PI_SPD_SEL_CDR_WIDTH		4
+#define RXTX_REG114_PQ_REG_INDEX		9
+#define RXTX_REG114_PQ_REG_WIDTH		7
+#define RXTX_REG115_FORCE_LAT_CAL_START_INDEX	2
+#define RXTX_REG115_FORCE_LAT_CAL_START_WIDTH	1
+#define RXTX_REG115_FORCE_SUM_CAL_START_INDEX	1
+#define RXTX_REG115_FORCE_SUM_CAL_START_WIDTH	1
+#define RXTX_REG142_SUM_CALIB_DONE_INDEX	15
+#define RXTX_REG142_SUM_CALIB_DONE_WIDTH	1
+#define RXTX_REG142_SUM_CALIB_ERR_INDEX		14
+#define RXTX_REG142_SUM_CALIB_ERR_WIDTH		1
+#define RXTX_REG142_LAT_CALIB_DONE_INDEX	11
+#define RXTX_REG142_LAT_CALIB_DONE_WIDTH	1
+
+#define RXTX_FULL_RATE				0x0
+#define RXTX_HALF_RATE				0x1
+#define RXTX_FIFTH_RATE				0x3
+#define RXTX_66BIT_WORD				0x7
+#define RXTX_10BIT_WORD				0x1
+#define RXTX_10G_TX_AMP				0xa
+#define RXTX_1G_TX_AMP				0xf
+#define RXTX_10G_CDR				0x7
+#define RXTX_1G_CDR				0x2
+#define RXTX_10G_PLL				0x1
+#define RXTX_1G_PLL				0x0
+#define RXTX_10G_PQ				0x1e
+#define RXTX_1G_PQ				0xa
+
+DEFINE_SPINLOCK(cmu_lock);
 
 enum amd_xgbe_phy_an {
 	AMD_XGBE_AN_READY = 0,
@@ -328,13 +339,14 @@ struct amd_xgbe_phy_priv {
 
 	/* SerDes related mmio resources */
 	struct resource *rxtx_res;
-	struct resource *sir0_res;
-	struct resource *sir1_res;
+	struct resource *cmu_res;
 
 	/* SerDes related mmio registers */
 	void __iomem *rxtx_regs;	/* SerDes Rx/Tx CSRs */
-	void __iomem *sir0_regs;	/* SerDes integration registers (1/2) */
-	void __iomem *sir1_regs;	/* SerDes integration registers (2/2) */
+	void __iomem *cmu_regs;		/* SerDes CMU CSRs */
+
+	unsigned int serdes_channel;
+	unsigned int speed_set;
 
 	/* Maintain link status for re-starting auto-negotiation */
 	unsigned int link;
@@ -401,33 +413,51 @@ static int amd_xgbe_phy_pcs_power_cycle(struct phy_device *phydev)
 static void amd_xgbe_phy_serdes_start_ratechange(struct phy_device *phydev)
 {
 	struct amd_xgbe_phy_priv *priv = phydev->priv;
+	u16 val, mask;
 
-	/* Assert Rx and Tx ratechange */
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, RATECHANGE, 1);
+	/* Assert Rx and Tx ratechange in CMU_reg16 */
+	val = XCMU_IOREAD(priv, CMU_REG16);
+
+	mask = (1 << (CMU_REG16_TX_RATE_CHANGE_BASE -
+		      (priv->serdes_channel * CMU_REG16_RATE_CHANGE_DECR))) |
+	       (1 << (CMU_REG16_RX_RATE_CHANGE_BASE -
+		      (priv->serdes_channel * CMU_REG16_RATE_CHANGE_DECR)));
+	val |= mask;
+
+	XCMU_IOWRITE(priv, CMU_REG16, val);
 }
 
 static void amd_xgbe_phy_serdes_complete_ratechange(struct phy_device *phydev)
 {
 	struct amd_xgbe_phy_priv *priv = phydev->priv;
+	u16 val, mask;
 	unsigned int wait;
-	u16 status;
 
-	/* Release Rx and Tx ratechange */
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, RATECHANGE, 0);
+	/* Release Rx and Tx ratechange for proper channel in CMU_reg16 */
+	val = XCMU_IOREAD(priv, CMU_REG16);
 
-	/* Wait for Rx and Tx ready */
+	mask = (1 << (CMU_REG16_TX_RATE_CHANGE_BASE -
+		      (priv->serdes_channel * CMU_REG16_RATE_CHANGE_DECR))) |
+	       (1 << (CMU_REG16_RX_RATE_CHANGE_BASE -
+		      (priv->serdes_channel * CMU_REG16_RATE_CHANGE_DECR)));
+	val &= ~mask;
+
+	XCMU_IOWRITE(priv, CMU_REG16, val);
+
+	/* Wait for Rx and Tx ready in CMU_reg15 */
+	mask = (1 << priv->serdes_channel) |
+	       (1 << (priv->serdes_channel + 8));
 	wait = XGBE_PHY_RATECHANGE_COUNT;
 	while (wait--) {
-		usleep_range(50, 75);
+		udelay(50);
 
-		status = XSIR0_IOREAD(priv, SIR0_STATUS);
-		if (XSIR_GET_BITS(status, SIR0_STATUS, RX_READY) &&
-		    XSIR_GET_BITS(status, SIR0_STATUS, TX_READY))
+		val = XCMU_IOREAD(priv, CMU_REG15);
+		if ((val & mask) == mask)
 			return;
 	}
 
 	netdev_dbg(phydev->attached_dev, "SerDes rx/tx not ready (%#hx)\n",
-		   status);
+		   val);
 }
 
 static int amd_xgbe_phy_xgmii_mode(struct phy_device *phydev)
@@ -435,8 +465,8 @@ static int amd_xgbe_phy_xgmii_mode(struct phy_device *phydev)
 	struct amd_xgbe_phy_priv *priv = phydev->priv;
 	int ret;
 
-	/* Enable KR training */
-	ret = amd_xgbe_an_enable_kr_training(phydev);
+	/* Disable KR training */
+	ret = amd_xgbe_an_disable_kr_training(phydev);
 	if (ret < 0)
 		return ret;
 
@@ -462,18 +492,29 @@ static int amd_xgbe_phy_xgmii_mode(struct phy_device *phydev)
 		return ret;
 
 	/* Set SerDes to 10G speed */
+	spin_lock(&cmu_lock);
+
 	amd_xgbe_phy_serdes_start_ratechange(phydev);
 
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, DATARATE, SPEED_10000_RATE);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, WORDMODE, SPEED_10000_WORD);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, TXAMP, SPEED_10000_TXAMP);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PLLSEL, SPEED_10000_PLL);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PI_SPD_SEL, SPEED_10000_CDR);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_DATA_RATE, RXTX_FULL_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_WORD_MODE, RXTX_66BIT_WORD);
 
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, RXTX_10000_BLWC);
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_10000_PQ);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG5, TXAMP_CNTL, RXTX_10G_TX_AMP);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_DATA_RATE, RXTX_FULL_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_WORD_MODE, RXTX_66BIT_WORD);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, 0);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, RX_PLLSELECT, RXTX_10G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, TX_PLLSELECT, RXTX_10G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, PI_SPD_SEL_CDR, RXTX_10G_CDR);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_10G_PQ);
 
 	amd_xgbe_phy_serdes_complete_ratechange(phydev);
+
+	spin_unlock(&cmu_lock);
 
 	return 0;
 }
@@ -510,18 +551,29 @@ static int amd_xgbe_phy_gmii_2500_mode(struct phy_device *phydev)
 		return ret;
 
 	/* Set SerDes to 2.5G speed */
+	spin_lock(&cmu_lock);
+
 	amd_xgbe_phy_serdes_start_ratechange(phydev);
 
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, DATARATE, SPEED_2500_RATE);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, WORDMODE, SPEED_2500_WORD);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, TXAMP, SPEED_2500_TXAMP);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PLLSEL, SPEED_2500_PLL);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PI_SPD_SEL, SPEED_2500_CDR);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_DATA_RATE, RXTX_HALF_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_WORD_MODE, RXTX_10BIT_WORD);
 
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, RXTX_2500_BLWC);
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_2500_PQ);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG5, TXAMP_CNTL, RXTX_1G_TX_AMP);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_DATA_RATE, RXTX_HALF_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_WORD_MODE, RXTX_10BIT_WORD);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, 1);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, RX_PLLSELECT, RXTX_1G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, TX_PLLSELECT, RXTX_1G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, PI_SPD_SEL_CDR, RXTX_1G_CDR);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_1G_PQ);
 
 	amd_xgbe_phy_serdes_complete_ratechange(phydev);
+
+	spin_unlock(&cmu_lock);
 
 	return 0;
 }
@@ -558,18 +610,45 @@ static int amd_xgbe_phy_gmii_mode(struct phy_device *phydev)
 		return ret;
 
 	/* Set SerDes to 1G speed */
+	spin_lock(&cmu_lock);
+
 	amd_xgbe_phy_serdes_start_ratechange(phydev);
 
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, DATARATE, SPEED_1000_RATE);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, WORDMODE, SPEED_1000_WORD);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, TXAMP, SPEED_1000_TXAMP);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PLLSEL, SPEED_1000_PLL);
-	XSIR1_IOWRITE_BITS(priv, SIR1_SPEED, PI_SPD_SEL, SPEED_1000_CDR);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_DATA_RATE, RXTX_FIFTH_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG3, TX_WORD_MODE, RXTX_10BIT_WORD);
 
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, RXTX_1000_BLWC);
-	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_1000_PQ);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG5, TXAMP_CNTL, RXTX_1G_TX_AMP);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_DATA_RATE, RXTX_FIFTH_RATE);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG6, RX_WORD_MODE, RXTX_10BIT_WORD);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG20, BLWC_ENA, 1);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, RX_PLLSELECT, RXTX_1G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, TX_PLLSELECT, RXTX_1G_PLL);
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG53, PI_SPD_SEL_CDR, RXTX_1G_CDR);
+
+	XRXTX_IOWRITE_BITS(priv, RXTX_REG114, PQ_REG, RXTX_1G_PQ);
 
 	amd_xgbe_phy_serdes_complete_ratechange(phydev);
+
+	spin_unlock(&cmu_lock);
+	return 0;
+}
+
+static int amd_xgbe_phy_cur_mode(struct phy_device *phydev,
+				 enum amd_xgbe_phy_mode *mode)
+{
+	int ret;
+
+	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_CTRL2);
+	if (ret < 0)
+		return ret;
+
+	if ((ret & MDIO_PCS_CTRL2_TYPE) == MDIO_PCS_CTRL2_10GBR)
+		*mode = AMD_XGBE_MODE_KR;
+	else
+		*mode = AMD_XGBE_MODE_KX;
 
 	return 0;
 }
@@ -638,7 +717,6 @@ static int amd_xgbe_phy_set_mode(struct phy_device *phydev,
 static enum amd_xgbe_phy_an amd_xgbe_an_tx_training(struct phy_device *phydev,
 						    enum amd_xgbe_phy_rx *state)
 {
-	struct amd_xgbe_phy_priv *priv = phydev->priv;
 	int ad_reg, lp_reg, ret;
 
 	*state = AMD_XGBE_RX_COMPLETE;
@@ -672,12 +750,8 @@ static enum amd_xgbe_phy_an amd_xgbe_an_tx_training(struct phy_device *phydev,
 	if (ret < 0)
 		return AMD_XGBE_AN_ERROR;
 
-	XSIR0_IOWRITE_BITS(priv, SIR0_KR_RT_1, RESET, 1);
-
 	ret |= 0x01;
 	phy_write_mmd(phydev, MDIO_MMD_PMAPMD, MDIO_PMA_10GBR_PMD_CTRL, ret);
-
-	XSIR0_IOWRITE_BITS(priv, SIR0_KR_RT_1, RESET, 0);
 
 	return AMD_XGBE_AN_EVENT;
 }
@@ -1331,21 +1405,33 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 		goto err_priv;
 	}
 
-	priv->sir0_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	priv->sir0_regs = devm_ioremap_resource(dev, priv->sir0_res);
-	if (IS_ERR(priv->sir0_regs)) {
-		dev_err(dev, "sir0 ioremap failed\n");
-		ret = PTR_ERR(priv->sir0_regs);
+	/* All xgbe phy devices share the CMU registers so retrieve
+	 * the resource and do the ioremap directly rather than
+	 * the devm_ioremap_resource call
+	 */
+	priv->cmu_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!priv->cmu_res) {
+		dev_err(dev, "cmu invalid resource\n");
+		ret = -EINVAL;
+		goto err_rxtx;
+	}
+	priv->cmu_regs = devm_ioremap_nocache(dev, priv->cmu_res->start,
+					      resource_size(priv->cmu_res));
+	if (!priv->cmu_regs) {
+		dev_err(dev, "cmu ioremap failed\n");
+		ret = -ENOMEM;
 		goto err_rxtx;
 	}
 
-	priv->sir1_res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
-	priv->sir1_regs = devm_ioremap_resource(dev, priv->sir1_res);
-	if (IS_ERR(priv->sir1_regs)) {
-		dev_err(dev, "sir1 ioremap failed\n");
-		ret = PTR_ERR(priv->sir1_regs);
-		goto err_sir0;
+	/* Get the device serdes channel property */
+	property = of_get_property(dev->of_node, XGBE_PHY_CHANNEL_PROPERTY,
+				   NULL);
+	if (!property) {
+		dev_err(dev, "unable to obtain serdes_channel property\n");
+		ret = -EINVAL;
+		goto err_cmu;
 	}
+	priv->serdes_channel = be32_to_cpu(*property);
 
 	/* Get the device speed set property */
 	speed_set = 0;
@@ -1364,7 +1450,7 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 	default:
 		dev_err(dev, "invalid amd,speed-set property\n");
 		ret = -EINVAL;
-		goto err_sir1;
+		goto err_cmu;
 	}
 
 	priv->link = 1;
@@ -1374,7 +1460,7 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 	priv->an_workqueue = create_singlethread_workqueue(wq_name);
 	if (!priv->an_workqueue) {
 		ret = -ENOMEM;
-		goto err_sir1;
+		goto err_cmu;
 	}
 
 	phydev->priv = priv;
@@ -1384,15 +1470,8 @@ static int amd_xgbe_phy_probe(struct phy_device *phydev)
 
 	return 0;
 
-err_sir1:
-	devm_iounmap(dev, priv->sir1_regs);
-	devm_release_mem_region(dev, priv->sir1_res->start,
-				resource_size(priv->sir1_res));
-
-err_sir0:
-	devm_iounmap(dev, priv->sir0_regs);
-	devm_release_mem_region(dev, priv->sir0_res->start,
-				resource_size(priv->sir0_res));
+err_cmu:
+	devm_iounmap(dev, priv->cmu_regs);
 
 err_rxtx:
 	devm_iounmap(dev, priv->rxtx_regs);
@@ -1424,14 +1503,7 @@ static void amd_xgbe_phy_remove(struct phy_device *phydev)
 	flush_workqueue(priv->an_workqueue);
 	destroy_workqueue(priv->an_workqueue);
 
-	/* Release resources */
-	devm_iounmap(dev, priv->sir1_regs);
-	devm_release_mem_region(dev, priv->sir1_res->start,
-				resource_size(priv->sir1_res));
-
-	devm_iounmap(dev, priv->sir0_regs);
-	devm_release_mem_region(dev, priv->sir0_res->start,
-				resource_size(priv->sir0_res));
+	devm_iounmap(dev, priv->cmu_regs);
 
 	devm_iounmap(dev, priv->rxtx_regs);
 	devm_release_mem_region(dev, priv->rxtx_res->start,
