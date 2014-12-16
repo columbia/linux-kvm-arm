@@ -352,7 +352,6 @@ struct amd_xgbe_phy_priv {
 
 	/* Maintain link status for re-starting auto-negotiation */
 	unsigned int link;
-	unsigned int speed_set;
 
 	/* Auto-negotiation state machine support */
 	struct mutex an_mutex;
@@ -635,23 +634,6 @@ static int amd_xgbe_phy_gmii_mode(struct phy_device *phydev)
 	amd_xgbe_phy_serdes_complete_ratechange(phydev);
 
 	spin_unlock(&cmu_lock);
-	return 0;
-}
-
-static int amd_xgbe_phy_cur_mode(struct phy_device *phydev,
-				 enum amd_xgbe_phy_mode *mode)
-{
-	int ret;
-
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_CTRL2);
-	if (ret < 0)
-		return ret;
-
-	if ((ret & MDIO_PCS_CTRL2_TYPE) == MDIO_PCS_CTRL2_10GBR)
-		*mode = AMD_XGBE_MODE_KR;
-	else
-		*mode = AMD_XGBE_MODE_KX;
-
 	return 0;
 }
 
