@@ -420,11 +420,35 @@ static void update_vttbr(struct kvm *kvm)
 static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
 {
 	int ret;
+	u32 tmp;
 
 	if (likely(vcpu->arch.has_run_once))
 		return 0;
 
 	vcpu->arch.has_run_once = true;
+
+#if defined(CONFIG_ARM)
+	asm volatile(	"mrc p15, 0, %0, c9, c12, 0\n" /* PMCR */
+                        "orr %0, %0, #1\n"      /* PMCR.E=1 */
+                        "orr %0, %0, #(1 << 2)\n"       /* Reset Cycle cnt */
+                        "bic %0, %0, #(1 << 3)\n"       /* Count each cycle */
+                        "mcr p15, 0, %0, c9, c12, 0\n" /* PMCR */
+                        "mov %0, #0b11111\n"    /* Select cycle cnt */
+                        "mcr p15, 0, %0, c9, c12, 5\n" /* PCSELR */
+                        "isb \n"
+                        "mrc p15, 0, %0, c9, c13, 1\n" /* PMXEVTYPER */
+                        "orr %0, %0, #(1 << 27)\n"      /* Count PL2 */
+                        "bic %0, %0, #(3 << 30)\n"      /* not NS PL1, PL0 */
+                        "bic %0, %0, #(3 << 28)\n"      /* SBZ */
+                        "mcr p15, 0, %0, c9, c13, 1\n" /* PMXEVTYPER */
+                        "mrc p15, 0, %0, c9, c12, 1\n" /* PMCNTENSET */
+                        "orr %0, %0, #(1 << 31)\n"      /* Enable Cycle cnt */
+                        "mcr p15, 0, %0, c9, c12, 1\n"  /* PMCNTENSET */
+                        : "=r" (tmp));
+#elif defined(CONFIG_ARM64)
+		/* TODO enable cycle counter in armv8  */
+#endif
+        isb();
 
 	/*
 	 * Initialize the VGIC before running a vcpu the first time on
