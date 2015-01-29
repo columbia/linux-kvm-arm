@@ -446,7 +446,23 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
                         "mcr p15, 0, %0, c9, c12, 1\n"  /* PMCNTENSET */
                         : "=r" (tmp));
 #elif defined(CONFIG_ARM64)
-		/* TODO enable cycle counter in armv8  */
+	asm volatile(	"mrs %0, PMCR_EL0\n"
+			"orr %0, %0, #1\n"
+			"orr %0, %0, #(1 << 2)\n"
+			"bic %0, %0, #(1 << 3)\n"
+			"msr PMCR_EL0, %0\n"
+			"mov %0, #0b11111\n"
+			"msr PMSELR_EL0, %0\n"
+			"isb \n"
+			"mrs %0, PMEVTYPER0_EL0\n"
+			"orr %0, %0, #(1 << 27)\n"
+			"bic %0, %0, #(3 << 30)\n"
+			"bic %0, %0, #(3 << 28)\n"
+			"msr PMEVTYPER0_EL0, %0\n"
+			"mrs %0, PMCNTENSET_EL0\n"
+			"orr %0, %0, #(1 << 31)\n"
+			"msr PMCNTENSET_EL0, %0\n"
+			: "=r" (tmp));
 #endif
         isb();
 
