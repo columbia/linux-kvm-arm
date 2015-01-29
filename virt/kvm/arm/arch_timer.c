@@ -37,6 +37,9 @@ static cycle_t kvm_phys_timer_read(void)
 	return timecounter->cc->read(timecounter->cc);
 }
 
+#define CREATE_TRACE_POINTS
+#include "trace.h"
+
 static bool timer_is_armed(struct arch_timer_cpu *timer)
 {
 	return timer->armed;
@@ -62,6 +65,8 @@ static void timer_disarm(struct arch_timer_cpu *timer)
 static void kvm_timer_inject_irq(struct kvm_vcpu *vcpu)
 {
 	struct arch_timer_cpu *timer = &vcpu->arch.timer_cpu;
+
+	trace_kvm_timer_inject_irq(vcpu->vcpu_id, timer->irq->irq);
 
 	timer->cntv_ctl |= ARCH_TIMER_CTRL_IT_MASK;
 	kvm_vgic_inject_irq(vcpu->kvm, vcpu->vcpu_id,

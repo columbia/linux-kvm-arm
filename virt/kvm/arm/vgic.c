@@ -32,6 +32,8 @@
 #include <asm/kvm_arm.h>
 #include <asm/kvm_mmu.h>
 
+#include "trace.h"
+
 /*
  * How the whole thing works (courtesy of Christoffer Dall):
  *
@@ -1122,6 +1124,8 @@ static void vgic_dispatch_sgi(struct kvm_vcpu *vcpu, u32 reg)
 		break;
 	}
 
+	trace_vgic_dispatch_sgi(sgi, vcpu_id, target_cpus);
+
 	kvm_for_each_vcpu(c, vcpu, kvm) {
 		if (target_cpus & 1) {
 			/* Flag the SGI as pending */
@@ -1185,10 +1189,10 @@ static void vgic_update_state(struct kvm *kvm)
 
 	kvm_for_each_vcpu(c, vcpu, kvm) {
 		if (compute_pending_for_cpu(vcpu)) {
-			pr_debug("CPU%d has pending interrupts\n", c);
 			set_bit(c, dist->irq_pending_on_cpu);
 		}
 	}
+	trace_vgic_update_state(*dist->irq_pending_on_cpu);
 }
 
 static struct vgic_lr vgic_get_lr(const struct kvm_vcpu *vcpu, int lr)
@@ -1300,15 +1304,12 @@ static bool vgic_queue_irq(struct kvm_vcpu *vcpu, u8 sgi_source_id, int irq)
 	BUG_ON(sgi_source_id && irq >= VGIC_NR_SGIS);
 	BUG_ON(irq >= dist->nr_irqs);
 
-	kvm_debug("Queue IRQ%d\n", irq);
-
 	lr = vgic_cpu->vgic_irq_lr_map[irq];
 
 	/* Do we have an active interrupt for the same CPUID? */
 	if (lr != LR_EMPTY) {
 		vlr = vgic_get_lr(vcpu, lr);
 		if (vlr.source == sgi_source_id) {
-			kvm_debug("LR%d piggyback for IRQ%d\n", lr, vlr.irq);
 			BUG_ON(!test_bit(lr, vgic_cpu->lr_used));
 			vlr.state |= LR_STATE_PENDING;
 			vgic_set_lr(vcpu, lr, vlr);
@@ -1322,7 +1323,6 @@ static bool vgic_queue_irq(struct kvm_vcpu *vcpu, u8 sgi_source_id, int irq)
 	if (lr >= vgic->nr_lr)
 		return false;
 
-	kvm_debug("LR%d allocated for IRQ%d %x\n", lr, irq, sgi_source_id);
 	vgic_cpu->vgic_irq_lr_map[irq] = lr;
 	set_bit(lr, vgic_cpu->lr_used);
 
@@ -1461,6 +1461,9 @@ static bool vgic_process_maintenance(struct kvm_vcpu *vcpu)
 
 		for_each_set_bit(lr, eisr_ptr, vgic->nr_lr) {
 			struct vgic_lr vlr = vgic_get_lr(vcpu, lr);
+
+			trace_vgic_process_maintence(vlr);
+
 			WARN_ON(vgic_irq_is_edge(vcpu, vlr.irq));
 
 			vgic_irq_clear_queued(vcpu, vlr.irq);
@@ -1616,6 +1619,8 @@ static bool vgic_update_irq_pending(struct kvm *kvm, int cpuid,
 	int enabled;
 	bool ret = true;
 
+	trace_vgic_update_irq_pending(cpuid, irq_num, level);
+
 	spin_lock(&dist->lock);
 
 	vcpu = kvm_get_vcpu(kvm, cpuid);
@@ -1631,8 +1636,6 @@ static bool vgic_update_irq_pending(struct kvm *kvm, int cpuid,
 		cpuid = dist->irq_spi_cpu[irq_num - VGIC_NR_PRIVATE_IRQS];
 		vcpu = kvm_get_vcpu(kvm, cpuid);
 	}
-
-	kvm_debug("Inject IRQ%d level %d CPU%d\n", irq_num, level, cpuid);
 
 	if (level) {
 		if (level_triggered)
