@@ -42,6 +42,12 @@ out:
 	return ret;
 }
 
+static inline void init_ccount(void)
+{
+	kvm_call_hyp((void*)0x4b000001);
+	printk("init ccount\n");
+}
+
 static noinline void __noop(void)
 {
 }
@@ -65,7 +71,9 @@ SYSCALL_DEFINE0(unit_test)
 	ret = init_mmio_test();
 	if (ret < 0)
 		goto out;
-	
+
+	init_ccount();
+
 	cc_before = read_cc();
 	//asm volatile("mov r0, #0x4b000000");
 	//asm volatile("hvc #0");
