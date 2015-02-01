@@ -4,7 +4,7 @@
 #include <linux/cpu.h>
 #include <linux/kvm_host.h>
 #include <asm/io.h>
-#include <asm/virt_test.h>
+#include <linux/virt_test.h>
 
 static void *mmio_read_user_addr;
 static void *vgic_dist_addr;
@@ -29,20 +29,22 @@ static noinline void __noop(void)
 {
 }
 
-#ifdef CONFIG_ARM
-static unsigned long read_cc(void)
+static ccount_t read_cc(void)
 {
-        unsigned long cc;
+        ccount_t cc;
+#ifdef CONFIG_ARM64
+	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+#else
         asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#endif
         return cc;
 }
-#endif
 
 #define GICC_EOIR		0x00000010
 
-static unsigned long hvc_test(void)
+static ccount_t hvc_test(void)
 {
-	unsigned long ret, cc_before, cc_after;
+	ccount_t ret, cc_before, cc_after;
 
 	cc_before = read_cc();
 	kvm_call_hyp((void*)0x4b000000);
@@ -51,9 +53,9 @@ static unsigned long hvc_test(void)
 	return ret;
 }
 
-static unsigned long noop_test(void)
+static ccount_t noop_test(void)
 {
-	unsigned long ret, cc_before, cc_after;
+	ccount_t ret, cc_before, cc_after;
 
 	cc_before = read_cc();
 	__noop();
@@ -62,9 +64,9 @@ static unsigned long noop_test(void)
 	return ret;
 }
 
-static unsigned long mmio_user(void)
+static ccount_t mmio_user(void)
 {
-	unsigned long ret, cc_before, cc_after;
+	ccount_t ret, cc_before, cc_after;
 	u32 val;
 
 	cc_before = read_cc();
@@ -75,9 +77,9 @@ static unsigned long mmio_user(void)
 }
 
 
-static unsigned long mmio_kernel(void)
+static ccount_t mmio_kernel(void)
 {
-	unsigned long ret, cc_before, cc_after;
+	ccount_t ret, cc_before, cc_after;
 	u32 val;
 
 	cc_before = read_cc();
@@ -87,9 +89,9 @@ static unsigned long mmio_kernel(void)
 	return ret;
 }
 
-static unsigned long eoi_test(void)
+static ccount_t eoi_test(void)
 {
-	unsigned long ret, cc_before, cc_after;
+	ccount_t ret, cc_before, cc_after;
 	u32 val;
 
 	val = 1023;
@@ -101,12 +103,12 @@ static unsigned long eoi_test(void)
 }
 
 struct virt_test available_tests[] = {
-	{ "hvc",                hvc_test,	true },
-	{ "noop_guest",         noop_test,	true },
-	{ "mmio_read_user",     mmio_user,	true },
-	{ "mmio_read_vgic",     mmio_kernel,	true },
-	{ "ipi",                NULL,		false },
-	{ "eoi",                eoi_test,	true },
+	{ "hvc",                hvc_test,	true},
+	{ "noop_guest",         noop_test,	true},
+	{ "mmio_read_user",     mmio_user,	true},
+	{ "mmio_read_vgic",     mmio_kernel,	true},
+	{ "ipi",                NULL,		false},
+	{ "eoi",                eoi_test,	true},
 };
 
 static int init_mmio_test(void)
@@ -137,10 +139,8 @@ out:
 static void loop_test(struct virt_test *test)
 {
 	unsigned long i, iterations = 32;
-	unsigned long sample, cycles;
+	ccount_t sample, cycles;
 
-	/* Reset count for each test*/
-	kvm_call_hyp((void*)0x4b000001);
 	do {
 		iterations *= 2;
 		cycles = 0;
@@ -152,7 +152,8 @@ static void loop_test(struct virt_test *test)
 				 * overflow, don't count that sample */
 				iterations--;
 				i--;
-				pr_warn("cycle count overflow: %lu\n", sample);
+				/* sample is always 0 here. why print? */
+				/* pr_warn("cycle count overflow: %lu\n", sample); */
 				continue;
 			}
 			cycles += sample;
@@ -163,13 +164,21 @@ static void loop_test(struct virt_test *test)
 	//debug("%s exit %d cycles over %d iterations = %d\n",
 	//       test->name, cycles, iterations, cycles / iterations);
 	printk("columbia %s\t%lu\n",
-	       test->name, cycles / iterations);
+	       test->name, (unsigned long)(cycles / iterations));
+}
+
+static void run_test_once(struct virt_test *test)
+{
+	ccount_t sample;
+	sample = test->test_fn();
+	printk("columbia %s\t%lu\n", test->name, (unsigned long)sample);
 }
 
 SYSCALL_DEFINE0(unit_test)
 {
 	struct virt_test *test;
 	unsigned long ret, i;
+	unsigned int run_once = 0;
 
 	i = 0;
 	ret = init_mmio_test();
@@ -177,9 +186,15 @@ SYSCALL_DEFINE0(unit_test)
 		goto out;
 
 	for_each_test(test, available_tests, i) {
+		/* Reset count for each test*/
+		kvm_call_hyp((void*)0x4b000001);
+
                 if (!test->run)
                         continue;
-		loop_test(test);
+		if (run_once)
+			run_test_once(test);
+		else
+			loop_test(test);
 	}
 out:
 	return ret;
