@@ -39,12 +39,23 @@ static int handle_svc_hyp(struct kvm_vcpu *vcpu, struct kvm_run *run)
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
+	u32 tmp;
 
 	trace_kvm_hvc(*vcpu_pc(vcpu), *vcpu_reg(vcpu, 0),
 		      kvm_vcpu_hvc_get_imm(vcpu));
 
 	if (*vcpu_reg(vcpu, 0) == 0x4b000000)
 		return 1;
+
+	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+		asm volatile(	
+			"mrc p15, 0, %0, c9, c12, 0\n" /* PMCR */
+                        "orr %0, %0, #(1 << 2)\n"       /* Reset Cycle cnt */
+                        "mcr p15, 0, %0, c9, c12, 0\n" /* PMCR */
+                        "isb \n"
+                        : "=r" (tmp));
+		return 1;
+	}
 
 	ret = kvm_psci_call(vcpu);
 	if (ret < 0) {
