@@ -45,22 +45,30 @@ static ccount_t read_cc(void)
 static ccount_t hvc_test(void)
 {
 	ccount_t ret, cc_before, cc_after;
+	unsigned long flags;
 
+	local_irq_save(flags);
 	cc_before = read_cc();
 	kvm_call_hyp((void*)0x4b000000);
 	cc_after = read_cc();
+	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
+
 	return ret;
 }
 
 static ccount_t noop_test(void)
 {
 	ccount_t ret, cc_before, cc_after;
+	unsigned long flags;
 
+	local_irq_save(flags);
 	cc_before = read_cc();
 	__noop();
 	cc_after = read_cc();
+	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
+
 	return ret;
 }
 
@@ -81,11 +89,15 @@ static ccount_t mmio_kernel(void)
 {
 	ccount_t ret, cc_before, cc_after;
 	u32 val;
+	unsigned long flags;
 
+	local_irq_save(flags);
 	cc_before = read_cc();
 	val = readl(vgic_dist_addr + 0x8); //Distributor Implementer Identification Register
 	cc_after = read_cc();
+	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
+
 	return ret;
 }
 
@@ -94,21 +106,25 @@ static ccount_t eoi_test(void)
 	ccount_t ret, cc_before, cc_after;
 	u32 val;
 
+	unsigned long flags;
 	val = 1023;
+	local_irq_save(flags);
 	cc_before = read_cc();
 	writel(val, vgic_cpu_addr + GICC_EOIR);
 	cc_after = read_cc();
+	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
+
 	return ret;
 }
 
 struct virt_test available_tests[] = {
 	{ "hvc",                hvc_test,	true},
-	{ "noop_guest",         noop_test,	true},
 	{ "mmio_read_user",     mmio_user,	true},
 	{ "mmio_read_vgic",     mmio_kernel,	true},
 	{ "ipi",                NULL,		false},
 	{ "eoi",                eoi_test,	true},
+	{ "noop_guest",         noop_test,	true},
 };
 
 static int init_mmio_test(void)
@@ -163,22 +179,22 @@ static void loop_test(struct virt_test *test)
 
 	//debug("%s exit %d cycles over %d iterations = %d\n",
 	//       test->name, cycles, iterations, cycles / iterations);
-	printk("columbia %s\t%lu\n",
-	       test->name, (unsigned long)(cycles / iterations));
+	printk("columbia %s\t%lu\t%lu\n",
+	       test->name, (unsigned long)(cycles / iterations), iterations);
 }
 
 static void run_test_once(struct virt_test *test)
 {
 	ccount_t sample;
 	sample = test->test_fn();
-	printk("columbia %s\t%lu\n", test->name, (unsigned long)sample);
+	printk("columbia once %s\t%lu\n", test->name, (unsigned long)sample);
 }
 
 SYSCALL_DEFINE0(unit_test)
 {
 	struct virt_test *test;
 	unsigned long ret, i;
-	unsigned int run_once = 0;
+	/* unsigned int run_once = 0; */
 
 	i = 0;
 	ret = init_mmio_test();
@@ -191,10 +207,8 @@ SYSCALL_DEFINE0(unit_test)
 
                 if (!test->run)
                         continue;
-		if (run_once)
-			run_test_once(test);
-		else
-			loop_test(test);
+		loop_test(test);
+		run_test_once(test);
 	}
 out:
 	return ret;
