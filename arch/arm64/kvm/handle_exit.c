@@ -31,10 +31,20 @@ typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
+	u32 tmp;
 
 	if (*vcpu_reg(vcpu, 0) == 0x4b000000)                          
                 return 1;
 
+	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+		asm volatile(	"mrs %0, PMCR_EL0\n"
+			"bic %0, %0, #(1 << 3)\n"
+			"msr PMCR_EL0, %0\n"
+			: "=r" (tmp));
+		isb();
+		return 1;
+	}
+                          
 	ret = kvm_psci_call(vcpu);
 	if (ret < 0) {
 		kvm_inject_undefined(vcpu);
