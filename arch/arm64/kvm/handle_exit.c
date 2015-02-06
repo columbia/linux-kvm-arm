@@ -38,7 +38,7 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
 		asm volatile(	"mrs %0, PMCR_EL0\n"
-			"bic %0, %0, #(1 << 3)\n"
+			"orr %0, %0, #(1 << 2)\n"
 			"msr PMCR_EL0, %0\n"
 			: "=r" (tmp));
 		isb();
