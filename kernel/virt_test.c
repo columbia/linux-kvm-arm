@@ -156,6 +156,7 @@ static void loop_test(struct virt_test *test)
 {
 	unsigned long i, iterations = 32;
 	ccount_t sample, cycles;
+	ccount_t min = 0, max = 0;
 
 	do {
 		iterations *= 2;
@@ -173,14 +174,19 @@ static void loop_test(struct virt_test *test)
 				continue;
 			}
 			cycles += sample;
+
+			if (min == 0 || min > sample)
+				min = sample;
+			if (max < sample)
+				max = sample;
 		}
 
 	} while (cycles < GOAL && count_cycles);
 
 	//debug("%s exit %d cycles over %d iterations = %d\n",
 	//       test->name, cycles, iterations, cycles / iterations);
-	printk("columbia %s\t%lu\t%lu\n",
-	       test->name, (unsigned long)(cycles / iterations), iterations);
+	printk("columbia %s\t%lu\t%lu, min: %lu, max: %lu\n",
+	       test->name, (unsigned long)(cycles / iterations), iterations, (unsigned long) min, (unsigned long) max);
 }
 
 static void run_test_once(struct virt_test *test)
