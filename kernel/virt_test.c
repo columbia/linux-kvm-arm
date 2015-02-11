@@ -15,7 +15,9 @@ extern void *gic_data_cpu_base_ex(void);
 
 static bool count_cycles = true;
 
+#ifndef CONFIG_ARM64
 __asm__(".arch_extension	virt");
+#endif
 
 
 #define GOAL (1ULL << 28)
@@ -123,23 +125,29 @@ static ccount_t eoi_test(void)
 
 static ccount_t trap_out_test(void)
 {
-	ccount_t trap_in = 0, trap_out = 0;
+	ccount_t trap_out = 0;
 	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
 
 	cc0 = 0, cc1 = 0, cc2 = 0;
+#ifdef CONFIG_ARM64
+	asm volatile(
+			"mov x0, #0x10000\n\t"
+			"mrs x3 , PMCCNTR_EL0\n\t"
+			"hvc #0\n\t"
+			"mrs x2 , PMCCNTR_EL0\n\t"
+			"mov %[cc0], x3\n\t"
+			"mov %[cc1], x1\n\t"
+			"mov %[cc2], x2\n\t":
+			[cc0] "=r" (cc0),
+			[cc1] "=r" (cc1),
+			[cc2] "=r" (cc2): :
+			"x0", "x1", "x2", "x3");
+#else
 	asm volatile(
 			"mov r0, #0x4c000000\n\t"
-#ifdef CONFIG_ARM64
-			"mrs r3 , PMCCNTR_EL0"
-#else
 			"mrc p15, 0, r3, c9, c13, 0\n\t"
-#endif
 			"hvc #0\n\t"
-#ifdef CONFIG_ARM64
-			"mrs r2 , PMCCNTR_EL0"
-#else
 			"mrc p15, 0, r2, c9, c13, 0\n\t"
-#endif
 			"mov %[cc0], r3\n\t"
 			"mov %[cc1], r1\n\t"
 			"mov %[cc2], r2\n\t":
@@ -147,9 +155,9 @@ static ccount_t trap_out_test(void)
 			[cc1] "=r" (cc1),
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
+#endif
 
-	trap_in += cc1 - cc0;
-	trap_out += cc2 - cc1;
+	trap_out = cc2 - cc1;
 
 	return trap_out;
 }
@@ -157,24 +165,30 @@ static ccount_t trap_out_test(void)
 
 static ccount_t trap_in_test(void)
 {
-	ccount_t trap_in = 0, trap_out = 0;
+	ccount_t trap_in = 0;
 	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
 
 	cc0 = 0, cc1 = 0, cc2 = 0;
-	asm volatile(
-			"mov r0, #0x4c000000\n\t"
-#ifdef CONFIG_ARM64
-			"mrs r3 , PMCCNTR_EL0"
-#else
-			"mrc p15, 0, r3, c9, c13, 0\n\t"
-#endif
-			"hvc #0\n\t"
 
 #ifdef CONFIG_ARM64
-			"mrs r2 , PMCCNTR_EL0"
+	asm volatile(
+			"mov x0, #0x10000\n\t"
+			"mrs x3 , PMCCNTR_EL0\n\t"
+			"hvc #0\n\t"
+			"mrs x2 , PMCCNTR_EL0\n\t"
+			"mov %[cc0], x3\n\t"
+			"mov %[cc1], x1\n\t"
+			"mov %[cc2], x2\n\t":
+			[cc0] "=r" (cc0),
+			[cc1] "=r" (cc1),
+			[cc2] "=r" (cc2): :
+			"x0", "x1", "x2", "x3");
 #else
+	asm volatile(
+			"mov r0, #0x4c000000\n\t"
+			"mrc p15, 0, r3, c9, c13, 0\n\t"
+			"hvc #0\n\t"
 			"mrc p15, 0, r2, c9, c13, 0\n\t"
-#endif
 			"mov %[cc0], r3\n\t"
 			"mov %[cc1], r1\n\t"
 			"mov %[cc2], r2\n\t":
@@ -182,9 +196,9 @@ static ccount_t trap_in_test(void)
 			[cc1] "=r" (cc1),
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
+#endif
 
-	trap_in += cc1 - cc0;
-	trap_out += cc2 - cc1;
+	trap_in = cc1 - cc0;
 
 	return trap_in;
 }
