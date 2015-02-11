@@ -15,6 +15,9 @@ extern void *gic_data_cpu_base_ex(void);
 
 static bool count_cycles = true;
 
+__asm__(".arch_extension	virt");
+
+
 #define GOAL (1ULL << 28)
 #define ARR_SIZE(_x) ((int)(sizeof(_x) / sizeof(_x[0])))
 #define for_each_test(_iter, _tests, _tmp) \
@@ -118,13 +121,83 @@ static ccount_t eoi_test(void)
 	return ret;
 }
 
+static ccount_t trap_out_test(void)
+{
+	ccount_t trap_in = 0, trap_out = 0;
+	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
+
+	cc0 = 0, cc1 = 0, cc2 = 0;
+	asm volatile(
+			"mov r0, #0x4c000000\n\t"
+#ifdef CONFIG_ARM64
+			"mrs r3 , PMCCNTR_EL0"
+#else
+			"mrc p15, 0, r3, c9, c13, 0\n\t"
+#endif
+			"hvc #0\n\t"
+#ifdef CONFIG_ARM64
+			"mrs r2 , PMCCNTR_EL0"
+#else
+			"mrc p15, 0, r2, c9, c13, 0\n\t"
+#endif
+			"mov %[cc0], r3\n\t"
+			"mov %[cc1], r1\n\t"
+			"mov %[cc2], r2\n\t":
+			[cc0] "=r" (cc0),
+			[cc1] "=r" (cc1),
+			[cc2] "=r" (cc2): :
+			"r0", "r1", "r2", "r3");
+
+	trap_in += cc1 - cc0;
+	trap_out += cc2 - cc1;
+
+	return trap_out;
+}
+
+
+static ccount_t trap_in_test(void)
+{
+	ccount_t trap_in = 0, trap_out = 0;
+	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
+
+	cc0 = 0, cc1 = 0, cc2 = 0;
+	asm volatile(
+			"mov r0, #0x4c000000\n\t"
+#ifdef CONFIG_ARM64
+			"mrs r3 , PMCCNTR_EL0"
+#else
+			"mrc p15, 0, r3, c9, c13, 0\n\t"
+#endif
+			"hvc #0\n\t"
+
+#ifdef CONFIG_ARM64
+			"mrs r2 , PMCCNTR_EL0"
+#else
+			"mrc p15, 0, r2, c9, c13, 0\n\t"
+#endif
+			"mov %[cc0], r3\n\t"
+			"mov %[cc1], r1\n\t"
+			"mov %[cc2], r2\n\t":
+			[cc0] "=r" (cc0),
+			[cc1] "=r" (cc1),
+			[cc2] "=r" (cc2): :
+			"r0", "r1", "r2", "r3");
+
+	trap_in += cc1 - cc0;
+	trap_out += cc2 - cc1;
+
+	return trap_in;
+}
+
 struct virt_test available_tests[] = {
 	{ "hvc",                hvc_test,	true},
-	{ "mmio_read_user",     mmio_user,	true},
+	{ "mmio_read_user",     mmio_user,	false},
 	{ "mmio_read_vgic",     mmio_kernel,	true},
 	{ "ipi",                NULL,		false},
 	{ "eoi",                eoi_test,	true},
 	{ "noop_guest",         noop_test,	true},
+	{ "trap-in",         trap_in_test,	true},
+	{ "trap-out",         trap_out_test,	true},
 };
 
 static int init_mmio_test(void)
@@ -203,6 +276,7 @@ SYSCALL_DEFINE0(unit_test)
 	/* unsigned int run_once = 0; */
 
 	i = 0;
+	printk("columbia unit-test start----------------------\n");
 	ret = init_mmio_test();
 	if (ret < 0)
 		goto out;
@@ -217,5 +291,6 @@ SYSCALL_DEFINE0(unit_test)
 		run_test_once(test);
 	}
 out:
+	printk("columbia unit-test end----------------------\n");
 	return ret;
 }
