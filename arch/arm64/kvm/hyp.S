@@ -1138,7 +1138,7 @@ ENDPROC(\label)
 el1_sync:
 	cmp	x0, #FAKE_X0 
 	b.ne	no_emu
-	mrs 	x1, PMCCNTR_EL0
+	mrs	x1, PMCCNTR_EL0
 	eret
 no_emu:
 	// Guest trapped into EL2
