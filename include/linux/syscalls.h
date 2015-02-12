@@ -220,6 +220,7 @@ asmlinkage long sys_times(struct tms __user *tbuf);
 asmlinkage long sys_gettid(void);
 asmlinkage long sys_nanosleep(struct timespec __user *rqtp, struct timespec __user *rmtp);
 asmlinkage long sys_unit_test(void);
+asmlinkage long sys_kvm_counter(int action);
 asmlinkage long sys_alarm(unsigned int seconds);
 asmlinkage long sys_getpid(void);
 asmlinkage long sys_getppid(void);

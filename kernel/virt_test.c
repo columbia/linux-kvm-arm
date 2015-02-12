@@ -196,6 +196,19 @@ static void run_test_once(struct virt_test *test)
 	printk("columbia once %s\t%lu\n", test->name, (unsigned long)sample);
 }
 
+asmlinkage long sys_kvm_counter(int action)
+{
+	printk("action %d\n");
+	if (action == 1)
+		kvm_call_hyp((void*)0x4b000002);
+	else if (action == 2)
+		kvm_call_hyp((void*)0x4b000003);
+	else if (action == 3)
+		kvm_call_hyp((void*)0x4b000004);
+	return 0;
+		
+}
+
 SYSCALL_DEFINE0(unit_test)
 {
 	struct virt_test *test;
