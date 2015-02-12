@@ -45,6 +45,9 @@
 #include <asm/kvm_coproc.h>
 #include <asm/kvm_psci.h>
 
+bool trace_arm_exit = false;
+unsigned long long kvm_exit_count;
+
 #ifdef REQUIRES_VIRT
 __asm__(".arch_extension	virt");
 #endif
@@ -569,6 +572,8 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		vcpu->arch.last_pcpu = smp_processor_id();
 		kvm_guest_exit();
 		trace_kvm_exit(*vcpu_pc(vcpu));
+		if (trace_arm_exit)
+			kvm_exit_count++;
 		/*
 		 * We may have taken a host interrupt in HYP mode (ie
 		 * while executing the guest). This interrupt is still

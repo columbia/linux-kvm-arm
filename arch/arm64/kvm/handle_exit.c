@@ -26,6 +26,9 @@
 #include <asm/kvm_mmu.h>
 #include <asm/kvm_psci.h>
 
+extern bool trace_arm_exit;
+extern unsigned long long kvm_exit_count;
+
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
 
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
@@ -42,6 +45,17 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 			"msr PMCR_EL0, %0\n"
 			: "=r" (tmp));
 		isb();
+		return 1;
+	} else if (*vcpu_reg(vcpu, 0) == 0x4b000002) {
+		kvm_err("ENABLING EXIT COUNT!\n");
+		trace_arm_exit = true;
+		kvm_exit_count = 0;
+		return 1;	
+	} else if (*vcpu_reg(vcpu, 0) == 0x4b000003) {
+		kvm_err("DISABLING EXIT COUNT!\n");
+		kvm_err("count %llu\n", kvm_exit_count);
+		trace_arm_exit = false;
+		kvm_exit_count = 0;
 		return 1;
 	}
                           
