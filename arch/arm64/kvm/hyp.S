@@ -1135,7 +1135,13 @@ ENDPROC(\label)
 	invalid_vector	el1_fiq_invalid, __kvm_hyp_panic
 	invalid_vector	el1_error_invalid, __kvm_hyp_panic
 
-el1_sync:					// Guest trapped into EL2
+el1_sync:
+	cmp	x0, #FAKE_X0 
+	b.ne	no_emu
+	mrs 	x1, PMCCNTR_EL0
+	eret
+no_emu:
+	// Guest trapped into EL2
 	push	x0, x1
 	push	x2, x3
 

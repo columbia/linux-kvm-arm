@@ -347,6 +347,7 @@ hyp_hvc:
 	 * Getting here is either becuase of a trap from a guest or from calling
 	 * HVC from the host kernel, which means "switch to Hyp mode".
 	 */
+	
 	push	{r0, r1, r2}
 
 	@ Check syndrome register

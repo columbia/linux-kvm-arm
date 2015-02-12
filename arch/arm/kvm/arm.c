@@ -56,6 +56,65 @@ static DEFINE_PER_CPU(unsigned long, kvm_arm_hyp_stack_page);
 static kvm_cpu_context_t __percpu *kvm_host_cpu_state;
 static unsigned long hyp_default_vectors;
 
+typedef unsigned long cctype;
+static void measure_hyp(void)
+{
+	unsigned long iter = 16;
+	unsigned long long trap_in = 0, trap_out = 0;
+	bool count_ok = true;
+	unsigned long i;
+	unsigned long long cc0 = 0, cc1 = 0, cc2 = 0;
+	
+	local_irq_disable();
+	do {
+		iter = iter << 1;
+		trap_in = trap_out = 0;
+		cc0 = cc1 = cc2 = 0;
+
+		for (i = 0; i < iter; i++) {
+			cc0 = 0, cc1 = 0, cc2 = 0;
+			asm volatile(
+					"mrs x0, PMCCNTR_EL0\n\t"
+					"hvc #0\n\t"
+					"mrs x2, PMCCNTR_EL0\n\t"
+					"mov %[cc0], x0\n\t"
+					"mov %[cc1], x1\n\t"
+					"mov %[cc2], x2\n\t":
+					[cc0] "=r" (cc0),
+					[cc1] "=r" (cc1),
+					[cc2] "=r" (cc2): :
+					"x0", "x1", "x2");
+
+			trap_in += cc1 - cc0;
+			trap_out += cc2 - cc0;
+		};
+		if (cc0 > cc2 || cc0 > cc1)
+			continue;
+		if (cc0 == cc1 || cc1 == cc2) {
+			count_ok = false;
+			break;
+		}
+
+		kvm_err("%s: iter %lu\n", __func__, iter);
+
+	} while (trap_in < (1 << 28) && trap_out < (1 << 28));
+	local_irq_enable();	
+
+	if (!count_ok) {
+		kvm_err("trap_measure: cycle counter not enabled or overflowed\n");
+		kvm_err("trap_measure: cc0: %llu, cc1: %llu, cc2: %llu\n",
+				(u64)cc0, (u64)cc1, (u64)cc2);
+		return;
+	}
+
+	/*kvm_err("trap_in %llu trap_out %llu\n", (u32) trap_in / iter, (u32) trap_out / iter);*/
+	kvm_err("trap_measure: trap_in cycles %llu over %lu iterations: %llu\n",
+		trap_in, iter, trap_in / iter);
+	kvm_err("trap_measure: trap_out cycles %llu over %lu iterations: %llu\n",
+		trap_out, iter, trap_out / iter);
+}
+
+
 /* Per-CPU variable containing the currently running vcpu. */
 static DEFINE_PER_CPU(struct kvm_vcpu *, kvm_arm_running_vcpu);
 
@@ -516,6 +575,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	ret = kvm_vcpu_first_run_init(vcpu);
 	if (ret)
 		return ret;
+
+	//measure_hyp();
+	//return -ENOEXEC;
 
 	if (run->exit_reason == KVM_EXIT_MMIO) {
 		ret = kvm_handle_mmio_return(vcpu, vcpu->run);
