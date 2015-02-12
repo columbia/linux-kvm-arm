@@ -25,6 +25,67 @@ static bool count_cycles = true;
 #define CYCLE_COUNT(c1, c2) \
         (((c1) > (c2) || ((c1) == (c2) && count_cycles)) ? 0 : (c2) - (c1))
 
+typedef unsigned long cctype;
+static void measure_hyp(void)
+{
+	unsigned long iter = 16;
+	unsigned long long trap_in = 0, trap_out = 0;
+	bool count_ok = true;
+	unsigned long i;
+	unsigned long long cc0 = 0, cc1 = 0, cc2 = 0;
+	
+	local_irq_disable();
+	kvm_err("MEASURE HYP\n");
+	do {
+		iter = iter << 1;
+		trap_in = trap_out = 0;
+		cc0 = cc1 = cc2 = 0;
+
+		for (i = 0; i < iter; i++) {
+			cc0 = 0, cc1 = 0, cc2 = 0;
+			asm volatile(
+					"mov x0, 0x10000\n\t"
+					"mrs x3, PMCCNTR_EL0\n\t"
+					"hvc #0\n\t"
+					"mrs x2, PMCCNTR_EL0\n\t"
+					"mov %[cc0], x3\n\t"
+					"mov %[cc1], x1\n\t"
+					"mov %[cc2], x2\n\t":
+					[cc0] "=r" (cc0),
+					[cc1] "=r" (cc1),
+					[cc2] "=r" (cc2): :
+					"x0", "x1", "x2", "x3");
+
+			trap_in += cc1 - cc0;
+			trap_out += cc2 - cc1;
+		};
+		
+		if (cc0 > cc2 || cc0 > cc1)
+			continue;
+		if (cc0 == cc1 || cc1 == cc2) {
+			count_ok = false;
+			break;
+		}
+
+		kvm_err("%s: iter %lu\n", __func__, iter);
+
+	} while (trap_in < (1 << 28) && trap_out < (1 << 28));
+	local_irq_enable();	
+
+	if (!count_ok) {
+		kvm_err("trap_measure: cycle counter not enabled or overflowed\n");
+		kvm_err("trap_measure: cc0: %llu, cc1: %llu, cc2: %llu\n",
+				(u64)cc0, (u64)cc1, (u64)cc2);
+		return;
+	}
+
+	/*kvm_err("trap_in %llu trap_out %llu\n", (u32) trap_in / iter, (u32) trap_out / iter);*/
+	kvm_err("trap_measure: trap_in cycles %llu over %lu iterations: %llu\n",
+		trap_in, iter, trap_in / iter);
+	kvm_err("trap_measure: trap_out cycles %llu over %lu iterations: %llu\n",
+		trap_out, iter, trap_out / iter);
+}
+
 static noinline void __noop(void)
 {
 }
@@ -214,6 +275,10 @@ SYSCALL_DEFINE0(unit_test)
 	struct virt_test *test;
 	unsigned long ret, i;
 	/* unsigned int run_once = 0; */
+
+	ret = 0;
+	measure_hyp();
+	goto out;
 
 	i = 0;
 	ret = init_mmio_test();
