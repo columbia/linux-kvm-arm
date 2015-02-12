@@ -232,6 +232,7 @@ static void loop_test(struct virt_test *test)
 				i--;
 				/* sample is always 0 here. why print? */
 				/* pr_warn("cycle count overflow: %lu\n", sample); */
+				kvm_call_hyp((void*)0x4b000001);
 				continue;
 			}
 			cycles += sample;
@@ -276,9 +277,9 @@ SYSCALL_DEFINE0(unit_test)
 	unsigned long ret, i;
 	/* unsigned int run_once = 0; */
 
-	ret = 0;
-	measure_hyp();
-	goto out;
+	//ret = 0;
+	//measure_hyp();
+	//goto out;
 
 	i = 0;
 	ret = init_mmio_test();
