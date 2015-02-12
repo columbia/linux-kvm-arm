@@ -125,23 +125,29 @@ static ccount_t eoi_test(void)
 
 static ccount_t trap_out_test(void)
 {
+	
+	unsigned long flags;
 	ccount_t trap_out = 0;
-	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
+	ccount_t before_hvc= 0, soh = 0, after_hvc = 0;
+	ccount_t eoh = 0; /* end of hyp */
 
-	cc0 = 0, cc1 = 0, cc2 = 0;
+	before_hvc = 0, soh = 0, after_hvc = 0;
+	local_irq_save(flags);
 #ifdef CONFIG_ARM64
 	asm volatile(
 			"mov x0, #0x10000\n\t"
 			"mrs x3 , PMCCNTR_EL0\n\t"
 			"hvc #0\n\t"
 			"mrs x2 , PMCCNTR_EL0\n\t"
-			"mov %[cc0], x3\n\t"
-			"mov %[cc1], x1\n\t"
-			"mov %[cc2], x2\n\t":
-			[cc0] "=r" (cc0),
-			[cc1] "=r" (cc1),
-			[cc2] "=r" (cc2): :
-			"x0", "x1", "x2", "x3");
+			"mov %[before_hvc], x3\n\t"
+			"mov %[soh], x1\n\t"
+			"mov %[eoh], x4\n\t"
+			"mov %[after_hvc], x2\n\t":
+			[before_hvc] "=r" (before_hvc),
+			[soh] "=r" (soh),
+			[after_hvc] "=r" (after_hvc),
+			[eoh] "=r" (eoh): :
+			"x0", "x1", "x2", "x3", "x4");
 #else
 	asm volatile(
 			"mov r0, #0x4c000000\n\t"
@@ -156,8 +162,8 @@ static ccount_t trap_out_test(void)
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
 #endif
-
-	trap_out = cc2 - cc1;
+	local_irq_restore(flags);
+	trap_out = after_hvc - soh;
 
 	return trap_out;
 }
@@ -165,11 +171,13 @@ static ccount_t trap_out_test(void)
 
 static ccount_t trap_in_test(void)
 {
+	unsigned long flags;
 	ccount_t trap_in = 0;
 	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
 
 	cc0 = 0, cc1 = 0, cc2 = 0;
 
+	local_irq_save(flags);
 #ifdef CONFIG_ARM64
 	asm volatile(
 			"mov x0, #0x10000\n\t"
@@ -197,6 +205,7 @@ static ccount_t trap_in_test(void)
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
 #endif
+	local_irq_restore(flags);
 
 	trap_in = cc1 - cc0;
 
