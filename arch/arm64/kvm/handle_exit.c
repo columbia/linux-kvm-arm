@@ -53,12 +53,15 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		return 1;	
 	} else if (*vcpu_reg(vcpu, 0) == 0x4b000003) {
 		kvm_err("DISABLING EXIT COUNT!\n");
-		kvm_err("count %llu\n", kvm_exit_count);
+		kvm_err("COUNT %llu\n", kvm_exit_count);
 		trace_arm_exit = false;
 		kvm_exit_count = 0;
 		return 1;
+	} else if (*vcpu_reg(vcpu, 0) == 0x4b000004) {
+		kvm_err("CURR COUNT %llu\n", kvm_exit_count);           
+		return 1;
 	}
-                          
+
 	ret = kvm_psci_call(vcpu);
 	if (ret < 0) {
 		kvm_inject_undefined(vcpu);
