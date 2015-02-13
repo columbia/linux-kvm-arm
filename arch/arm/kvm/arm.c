@@ -646,7 +646,6 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 			hv_cc1 = read_cc();
 			if (hv_cc1 < hv_cc0)
 				kvm_err("HVC HIGHVISOR %llu\n", hv_cc0 - hv_cc1);
-			BUG_ON(1);
 		}
 
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
