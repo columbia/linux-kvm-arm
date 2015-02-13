@@ -28,6 +28,7 @@
 
 extern bool trace_arm_exit;
 extern unsigned long long kvm_exit_count;
+unsigned long long current_counter;
 
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
 
@@ -40,9 +41,23 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
                 return 1;
 
 	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+		u32 tmp;
 		asm volatile(	"mrs %0, PMCR_EL0\n"
+			"orr %0, %0, #1\n"
 			"orr %0, %0, #(1 << 2)\n"
+			"bic %0, %0, #(1 << 3)\n"
 			"msr PMCR_EL0, %0\n"
+			"mov %0, #0b11111\n"
+			"msr PMSELR_EL0, %0\n"
+			"isb \n"
+			"mrs %0, PMXEVTYPER_EL0\n"
+			"orr %0, %0, #(1 << 27)\n"
+			"bic %0, %0, #(3 << 30)\n"
+			"bic %0, %0, #(3 << 28)\n"
+			"msr PMXEVTYPER_EL0, %0\n"
+			"mrs %0, PMCNTENSET_EL0\n"
+			"orr %0, %0, #(1 << 31)\n"
+			"msr PMCNTENSET_EL0, %0\n"
 			: "=r" (tmp));
 		isb();
 		return 1;
@@ -58,7 +73,7 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		kvm_exit_count = 0;
 		return 1;
 	} else if (*vcpu_reg(vcpu, 0) == 0x4b000004) {
-		kvm_err("CURR COUNT %llu\n", kvm_exit_count);           
+		kvm_err("CURR COUNT %llu\n", kvm_exit_count);
 		return 1;
 	}
 

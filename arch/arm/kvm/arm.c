@@ -56,6 +56,18 @@ static DEFINE_PER_CPU(unsigned long, kvm_arm_hyp_stack_page);
 static kvm_cpu_context_t __percpu *kvm_host_cpu_state;
 static unsigned long hyp_default_vectors;
 
+static unsigned long long read_cc(void)
+{
+	unsigned long long cc;
+
+	asm volatile(
+		"mrs %0, PMCCNTR_EL0\n"
+		: [reg] "=r" (cc) 
+		::
+	);
+        return cc;
+}
+
 typedef unsigned long cctype;
 static void measure_hyp(void)
 {
@@ -568,6 +580,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
 	sigset_t sigsaved;
+	unsigned long long hv_cc0, hv_cc1;
 
 	if (unlikely(!kvm_vcpu_initialized(vcpu)))
 		return -ENOEXEC;
@@ -578,6 +591,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 	//measure_hyp();
 	//return -ENOEXEC;
+	hv_cc0 = hv_cc1 = 0;
 
 	if (run->exit_reason == KVM_EXIT_MMIO) {
 		ret = kvm_handle_mmio_return(vcpu, vcpu->run);
@@ -628,7 +642,17 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		kvm_guest_enter();
 		vcpu->mode = IN_GUEST_MODE;
 
+		if (*vcpu_reg(vcpu, 0) == 0x4b000000) {
+			hv_cc1 = read_cc();
+			if (hv_cc1 < hv_cc0)
+				kvm_err("HVC HIGHVISOR %llu\n", hv_cc0 - hv_cc1);
+			BUG_ON(1);
+		}
+
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
+
+		if (*vcpu_reg(vcpu, 0) == 0x4b000000)
+			hv_cc0 = read_cc();
 
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		vcpu->arch.last_pcpu = smp_processor_id();
