@@ -28,9 +28,18 @@
 
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
 
+extern void kvm_arm_enable_cycle_counter(void);
+
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
+
+	if (*vcpu_reg(vcpu, 0) == 0x4b000000)
+		return 1;
+	else if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+		kvm_arm_enable_cycle_counter();
+		return 1;
+	}	
 
 	ret = kvm_psci_call(vcpu);
 	if (ret < 0) {

@@ -63,6 +63,30 @@ static DEFINE_SPINLOCK(kvm_vmid_lock);
 
 static bool vgic_present;
 
+void kvm_arm_enable_cycle_counter(void)
+{
+	u32 tmp;
+	asm volatile( "mrs %0, PMCR_EL0\n"
+			"orr %0, %0, #1\n"
+			"orr %0, %0, #(1 << 2)\n"
+			"bic %0, %0, #(1 << 3)\n"
+			"msr PMCR_EL0, %0\n"
+			"mov %0, #0b11111\n"
+			"msr PMSELR_EL0, %0\n"
+			"isb \n"
+			"mrs %0, PMXEVTYPER_EL0\n"
+			"orr %0, %0, #(1 << 27)\n"
+			"bic %0, %0, #(3 << 30)\n"
+			"bic %0, %0, #(3 << 28)\n"
+			"msr PMXEVTYPER_EL0, %0\n"
+			"mrs %0, PMCNTENSET_EL0\n"
+			"orr %0, %0, #(1 << 31)\n"
+			"msr PMCNTENSET_EL0, %0\n"
+			: "=r" (tmp));
+	isb();
+	return;
+}
+
 static void kvm_arm_set_running_vcpu(struct kvm_vcpu *vcpu)
 {
 	BUG_ON(preemptible());
@@ -426,6 +450,8 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
 
 	vcpu->arch.has_run_once = true;
 
+	kvm_arm_enable_cycle_counter();
+	
 	/*
 	 * Initialize the VGIC before running a vcpu the first time on
 	 * this VM.
