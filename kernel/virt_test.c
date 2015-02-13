@@ -267,6 +267,8 @@ static void loop_test(struct virt_test *test)
 				i--;
 				/* sample is always 0 here. why print? */
 				/* pr_warn("cycle count overflow: %lu\n", sample); */
+				/* Remove Me  */
+				kvm_call_hyp((void*)0x4b000001);
 				continue;
 			}
 			cycles += sample;
