@@ -138,6 +138,10 @@ struct kvm_vcpu_arch {
 
 	/* Detect first run of a vcpu */
 	bool has_run_once;
+
+	uint64_t  counter_e;
+	uint64_t  trap_lh_cc1; 
+	uint64_t  trap_lh_cc2; 
 };
 
 #define vcpu_gp_regs(v)		(&(v)->arch.ctxt.gp_regs)

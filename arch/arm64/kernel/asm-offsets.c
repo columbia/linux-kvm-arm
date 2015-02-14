@@ -151,6 +151,9 @@ int main(void)
   DEFINE(VGIC_CPU_NR_LR,	offsetof(struct vgic_cpu, nr_lr));
   DEFINE(KVM_VTTBR,		offsetof(struct kvm, arch.vttbr));
   DEFINE(KVM_VGIC_VCTRL,	offsetof(struct kvm, arch.vgic.vctrl_base));
+  DEFINE(COUNTER_ENABLED,	offsetof(struct kvm_vcpu, arch.counter_e));
+  DEFINE(LH_CC1,		offsetof(struct kvm_vcpu, arch.trap_lh_cc1));
+  DEFINE(LH_CC2,		offsetof(struct kvm_vcpu, arch.trap_lh_cc2));
 #endif
 #ifdef CONFIG_ARM64_CPU_SUSPEND
   DEFINE(CPU_SUSPEND_SZ,	sizeof(struct cpu_suspend_ctx));

@@ -37,8 +37,14 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	int ret;
 	u32 tmp;
 
-	if (*vcpu_reg(vcpu, 0) == 0x4b000000)                          
+	if (*vcpu_reg(vcpu, 0) == 0x4b000000)
                 return 1;
+
+	if (*vcpu_reg(vcpu, 0) == FAKE_X0) {
+		*vcpu_reg(vcpu, 0) = vcpu->arch.trap_lh_cc1;          
+		*vcpu_reg(vcpu, 1) = vcpu->arch.trap_lh_cc2;
+		return 1;
+	}
 
 	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
 		u32 tmp;

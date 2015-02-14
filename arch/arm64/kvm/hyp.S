@@ -31,10 +31,13 @@
 #define CPU_XREG_OFFSET(x)	CPU_GP_REG_OFFSET(CPU_USER_PT_REGS + 8*x)
 #define CPU_SPSR_OFFSET(x)	CPU_GP_REG_OFFSET(CPU_SPSR + 8*x)
 #define CPU_SYSREG_OFFSET(x)	(CPU_SYSREGS + 8*x)
-
 	.text
 	.pushsection	.hyp.text, "ax"
 	.align	PAGE_SHIFT
+
+.macro read_ccounter reg
+	mrs	\reg, PMCCNTR_EL0
+.endm
 
 .macro save_common_regs
 	// x2: base address for cpu context
@@ -961,7 +964,7 @@ ENTRY(__kvm_vcpu_run)
 __kvm_vcpu_return:
 	// Assume x0 is the vcpu pointer, x1 the return code
 	// Guest's x0-x3 are on the stack
-
+	
 	// Guest context
 	add	x2, x0, #VCPU_CONTEXT
 
@@ -995,7 +998,16 @@ __kvm_vcpu_return:
 	bl	__restore_debug
 1:
 	restore_host_regs
-
+	
+	push	x0, x1
+	mrs	x0, tpidr_el2
+	ldr	x1, [x0, #S_X0]
+	cmp	x1, #FAKE_X0
+	bne	skip_cc
+	read_ccounter x1
+	str	x1, [x0, #LH_CC2]	
+skip_cc:
+	pop	x0, x1
 	mov	x0, x1
 	ret
 END(__kvm_vcpu_run)
@@ -1138,8 +1150,11 @@ ENDPROC(\label)
 el1_sync:
 	cmp	x0, #FAKE_X0 
 	b.ne	no_emu
-	mrs	x1, PMCCNTR_EL0
-	eret
+	mrs	x1, tpidr_el2
+	#str	x0, [x1, #COUNTER_ENABLED]
+	read_ccounter x0
+	str	x0, [x1, #LH_CC1]	
+	#eret
 no_emu:
 	// Guest trapped into EL2
 	push	x0, x1
