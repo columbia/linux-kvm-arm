@@ -112,6 +112,8 @@
 #define KVM_ARM64_DEBUG_DIRTY_SHIFT	0
 #define KVM_ARM64_DEBUG_DIRTY		(1 << KVM_ARM64_DEBUG_DIRTY_SHIFT)
 
+#define FAKE_X0		0x10000
+
 #ifndef __ASSEMBLY__
 struct kvm;
 struct kvm_vcpu;
