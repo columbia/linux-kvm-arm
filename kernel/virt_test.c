@@ -129,6 +129,7 @@ static ccount_t trap_out_test(void)
 	unsigned long flags;
 	ccount_t trap_out = 0;
 	ccount_t before_hvc= 0, soh = 0, after_hvc = 0;
+	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
 	ccount_t eoh = 0; /* end of hyp */
 
 	before_hvc = 0, soh = 0, after_hvc = 0;
