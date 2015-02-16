@@ -15,6 +15,8 @@ extern void *gic_data_cpu_base_ex(void);
 
 static bool count_cycles = true;
 
+volatile int cpu1_ipi_ack;
+
 #ifndef CONFIG_ARM64
 __asm__(".arch_extension	virt");
 #endif
@@ -29,6 +31,8 @@ __asm__(".arch_extension	virt");
 
 #define CYCLE_COUNT(c1, c2) \
         (((c1) > (c2) || ((c1) == (c2) && count_cycles)) ? 0 : (c2) - (c1))
+
+extern void smp_send_virttest(int cpu);
 
 static noinline void __noop(void)
 {
@@ -46,6 +50,44 @@ static ccount_t read_cc(void)
 }
 
 #define GICC_EOIR		0x00000010
+
+void send_and_wait_ipi(void)
+{
+	int cpu;
+	unsigned long timeout = 1U << 28;
+
+	cpu1_ipi_ack = 0;
+	for_each_online_cpu(cpu) {
+		if (cpu == smp_processor_id())
+			continue;
+		else {
+			smp_send_virttest(cpu);
+			break;
+		}
+	}
+	while (!cpu1_ipi_ack && timeout--);
+	
+	if (!cpu1_ipi_ack)
+		pr_warn("ipi received failed\n");
+
+	return;
+}
+
+static ccount_t ipi_test(void)
+{
+	ccount_t ret, cc_before, cc_after;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = read_cc();
+	send_and_wait_ipi();
+	cc_after = read_cc();
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	return ret;
+
+}
 
 static ccount_t hvc_test(void)
 {
@@ -217,11 +259,11 @@ struct virt_test available_tests[] = {
 	{ "hvc",                hvc_test,	true},
 	{ "mmio_read_user",     mmio_user,	false},
 	{ "mmio_read_vgic",     mmio_kernel,	true},
-	{ "ipi",                NULL,		false},
 	{ "eoi",                eoi_test,	true},
 	{ "noop_guest",         noop_test,	true},
-	{ "trap-in",         trap_in_test,	true},
-	{ "trap-out",         trap_out_test,	true},
+	{ "ipi",                ipi_test,	true},
+	{ "trap-in",         trap_in_test,	false},
+	{ "trap-out",         trap_out_test,	false},
 };
 
 static int init_mmio_test(void)

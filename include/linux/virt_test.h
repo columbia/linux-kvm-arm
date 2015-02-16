@@ -9,3 +9,5 @@ struct virt_test {
 	ccount_t (*test_fn)(void);
 	bool run;
 };
+
+extern volatile int cpu1_ipi_ack;
