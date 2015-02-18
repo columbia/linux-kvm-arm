@@ -63,6 +63,14 @@ static DEFINE_SPINLOCK(kvm_vmid_lock);
 
 static bool vgic_present;
 
+static unsigned long long read_cc(void)
+{
+        unsigned long cc;
+
+	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+        return cc;
+}
+
 static void kvm_arm_set_running_vcpu(struct kvm_vcpu *vcpu)
 {
 	BUG_ON(preemptible());
@@ -563,7 +571,13 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		kvm_guest_enter();
 		vcpu->mode = IN_GUEST_MODE;
 
+		/*if (*vcpu_reg(vcpu, 0) == 0x10000)
+                        *vcpu_reg(vcpu, 3) = read_cc();*/
+
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
+
+		/*if (*vcpu_reg(vcpu, 0) == 0x10000)
+                        *vcpu_reg(vcpu, 2) = read_cc();*/
 
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		vcpu->arch.last_pcpu = smp_processor_id();

@@ -43,6 +43,8 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 	trace_kvm_hvc(*vcpu_pc(vcpu), *vcpu_reg(vcpu, 0),
 		      kvm_vcpu_hvc_get_imm(vcpu));
+	if (*vcpu_reg(vcpu, 0) == 0x10000)
+		return 1; 
 
 	if (*vcpu_reg(vcpu, 0) == 0x4b000000)
 		return 1;
