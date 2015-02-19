@@ -36,6 +36,10 @@
 	.pushsection	.hyp.text, "ax"
 	.align	PAGE_SHIFT
 
+.macro read_ccounter reg
+mrs \reg, PMCCNTR_EL0
+.endm
+
 .macro save_common_regs
 	// x2: base address for cpu context
 	// x3: tmp register
@@ -122,6 +126,8 @@
 	// x3 is a tmp register
 	// Guest's x0-x3 are on the stack
 
+	read_ccounter x3
+	str	x3, [x0, #VCPU_SAVE_CC1]
 	// Compute base to save registers
 	add	x3, x2, #CPU_XREG_OFFSET(4)
 	stp	x4, x5, [x3]
@@ -141,6 +147,8 @@
 	stp	x6, x7, [x3, #16]
 
 	save_common_regs
+	read_ccounter x3
+	str	x3, [x0, #VCPU_SAVE_CC2]
 .endm
 
 .macro restore_guest_regs
@@ -148,6 +156,8 @@
 	// x2 is the cpu context
 	// x3 is a tmp register
 
+	read_ccounter x1
+	str	x1, [x0, #VCPU_REST_CC1]
 	// Prepare x0-x3 for later restore
 	add	x3, x2, #CPU_XREG_OFFSET(0)
 	ldp	x4, x5, [x3]
@@ -170,6 +180,11 @@
 
 	// Last bits of the 64bit state
 	pop	x2, x3
+
+	read_ccounter x1
+	mrs	x0, tpidr_el2
+	str	x1, [x0, #VCPU_WS_ENT_CC2]
+	str	x1, [x0, #VCPU_REST_CC2]
 	pop	x0, x1
 
 	// Do not touch any register after this!
@@ -940,8 +955,12 @@ ENTRY(__kvm_vcpu_run)
 	activate_traps
 	activate_vm
 
+	read_ccounter x2
+	str	x2, [x0, #VCPU_VGIC_REST_CC1]
 	restore_vgic_state
 	restore_timer_state
+	read_ccounter x2
+	str	x2, [x0, #VCPU_VGIC_REST_CC2]
 
 	// Guest context
 	add	x2, x0, #VCPU_CONTEXT
@@ -974,8 +993,12 @@ __kvm_vcpu_return:
 1:
 	save_guest_32bit_state
 
+	read_ccounter x2
+	str	x2, [x0, #VCPU_VGIC_SAVE_CC1]
 	save_timer_state
 	save_vgic_state
+	read_ccounter x2
+	str	x2, [x0, #VCPU_VGIC_SAVE_CC2]
 
 	deactivate_traps
 	deactivate_vm
@@ -1136,11 +1159,13 @@ ENDPROC(\label)
 	invalid_vector	el1_error_invalid, __kvm_hyp_panic
 
 el1_sync:					// Guest trapped into EL2
-	cmp	x0, #FAKE_X0
-	b.ne 	no_emu
-	mrs 	x1, PMCCNTR_EL0
+#ifdef CONFIG_KVM_TRAP_TEST
+	cmp     x0, #FAKE_X0
+	b.ne    no_emu
+	mrs     x1, PMCCNTR_EL0
 	eret
 no_emu:
+#endif
 	push	x0, x1
 	push	x2, x3
 
@@ -1182,6 +1207,9 @@ el1_trap:
 	 * x1: ESR
 	 * x2: ESR_EC
 	 */
+	mrs	x0, tpidr_el2
+	read_ccounter x3
+	str	x3, [x0, #VCPU_WS_RET_CC1]
 	cmp	x2, #ESR_EL2_EC_DABT
 	mov	x0, #ESR_EL2_EC_IABT
 	ccmp	x2, x0, #4, ne

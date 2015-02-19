@@ -190,7 +190,7 @@ int main(void)
   DEFINE(VCPU_HxFAR,		offsetof(struct kvm_vcpu, arch.fault.hxfar));
   DEFINE(VCPU_HPFAR,		offsetof(struct kvm_vcpu, arch.fault.hpfar));
   DEFINE(VCPU_HYP_PC,		offsetof(struct kvm_vcpu, arch.fault.hyp_pc));
-
+  /* KVM measurement */
   DEFINE(VCPU_WS_ENT_CC1, 	offsetof(struct kvm_vcpu, arch.ws_ent_cc1));
   DEFINE(VCPU_WS_ENT_CC2, 	offsetof(struct kvm_vcpu, arch.ws_ent_cc2));
   DEFINE(VCPU_WS_RET_CC1, 	offsetof(struct kvm_vcpu, arch.ws_ret_cc1));

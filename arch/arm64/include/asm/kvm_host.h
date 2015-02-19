@@ -138,6 +138,22 @@ struct kvm_vcpu_arch {
 
 	/* Detect first run of a vcpu */
 	bool has_run_once;
+
+	ccount_t ws_ent_cc1;
+	ccount_t ws_ent_cc2;
+	ccount_t ws_ret_cc1;
+	ccount_t ws_ret_cc2;
+	ccount_t vgic_rest_cc1;
+	ccount_t vgic_rest_cc2;
+	ccount_t vgic_save_cc1;
+	ccount_t vgic_save_cc2;
+	ccount_t vfp_cc1;
+	ccount_t vfp_cc2;
+	ccount_t vcpu_save_cc1;
+	ccount_t vcpu_save_cc2;
+	ccount_t vcpu_rest_cc1;
+	ccount_t vcpu_rest_cc2;
+
 };
 
 #define vcpu_gp_regs(v)		(&(v)->arch.ctxt.gp_regs)
@@ -163,6 +179,13 @@ struct kvm_vm_stat {
 
 struct kvm_vcpu_stat {
 	u32 halt_wakeup;
+	CYCLE_STAT(ws_cycles);
+	CYCLE_STAT(hyp_ent_cycles);
+	CYCLE_STAT(hyp_ret_cycles);
+	CYCLE_STAT(vgic_cycles);
+	CYCLE_STAT(vcpu_cycles);
+	CYCLE_STAT(vfp_cycles);
+	CYCLE_STAT(abt_cycles);
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,

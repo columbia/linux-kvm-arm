@@ -68,9 +68,12 @@ bool enable_ws_stats = false;
 static ccount_t read_cc(void)
 {
         ccount_t cc;
-
+#ifdef CONFIG_ARM64
+	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+#else
 	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
-        return cc;
+#endif
+	return cc;
 }
 
 /*static void __calc_avg(struct kvm_vcpu *vcpu, u32 *oldavg,
@@ -508,7 +511,7 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
 
 	vcpu->arch.has_run_once = true;
 
-#if defined(CONFIG_ARM)
+#ifdef CONFIG_ARM
 	asm volatile(	"mrc p15, 0, %0, c9, c12, 0\n" /* PMCR */
                         "orr %0, %0, #1\n"      /* PMCR.E=1 */
                         "orr %0, %0, #(1 << 2)\n"       /* Reset Cycle cnt */
@@ -526,7 +529,7 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
                         "orr %0, %0, #(1 << 31)\n"      /* Enable Cycle cnt */
                         "mcr p15, 0, %0, c9, c12, 1\n"  /* PMCNTENSET */
                         : "=r" (tmp));
-#elif defined(CONFIG_ARM64)
+#elif CONFIG_ARM64
 	asm volatile(	"mrs %0, PMCR_EL0\n"
 			"orr %0, %0, #1\n"
 			"orr %0, %0, #(1 << 2)\n"

@@ -27,11 +27,26 @@
 #include <asm/kvm_psci.h>
 
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
+extern bool enable_ws_stats;
 
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
 	u32 tmp;
+
+	if (*vcpu_reg(vcpu, 0) == 0x10000) {
+		enable_ws_stats = true;	
+		return 1;
+	} else if (*vcpu_reg(vcpu, 0) == 0x11000) {
+		kvm_err("WS MIN %llu AVG %llu\n" ,vcpu->stat.ws_cycles ,vcpu->stat.ws_cycles_avg);
+		kvm_err("VGIC MIN %llu AVG %llu\n" ,vcpu->stat.vgic_cycles ,vcpu->stat.vgic_cycles_avg);
+		kvm_err("VCPU MIN %llu AVG %llu\n" ,vcpu->stat.vcpu_cycles ,vcpu->stat.vcpu_cycles_avg);
+		vcpu->stat.ws_cycles = 10000000;
+		vcpu->stat.vgic_cycles = 10000000;
+		vcpu->stat.vcpu_cycles = 10000000;
+		enable_ws_stats = false;	
+		return 1;
+	}
 
 	if (*vcpu_reg(vcpu, 0) == 0x4b000000)                          
                 return 1;

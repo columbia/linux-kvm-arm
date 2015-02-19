@@ -151,6 +151,21 @@ int main(void)
   DEFINE(VGIC_CPU_NR_LR,	offsetof(struct vgic_cpu, nr_lr));
   DEFINE(KVM_VTTBR,		offsetof(struct kvm, arch.vttbr));
   DEFINE(KVM_VGIC_VCTRL,	offsetof(struct kvm, arch.vgic.vctrl_base));
+  /* KVM measurement  */
+  DEFINE(VCPU_WS_ENT_CC1, 	offsetof(struct kvm_vcpu, arch.ws_ent_cc1));
+  DEFINE(VCPU_WS_ENT_CC2, 	offsetof(struct kvm_vcpu, arch.ws_ent_cc2));
+  DEFINE(VCPU_WS_RET_CC1, 	offsetof(struct kvm_vcpu, arch.ws_ret_cc1));
+  DEFINE(VCPU_WS_RET_CC2, 	offsetof(struct kvm_vcpu, arch.ws_ret_cc2));
+  DEFINE(VCPU_VGIC_REST_CC1, 	offsetof(struct kvm_vcpu, arch.vgic_rest_cc1));
+  DEFINE(VCPU_VGIC_REST_CC2, 	offsetof(struct kvm_vcpu, arch.vgic_rest_cc2));
+  DEFINE(VCPU_VGIC_SAVE_CC1, 	offsetof(struct kvm_vcpu, arch.vgic_save_cc1));
+  DEFINE(VCPU_VGIC_SAVE_CC2, 	offsetof(struct kvm_vcpu, arch.vgic_save_cc2));
+  DEFINE(VCPU_VFP_CC1, 		offsetof(struct kvm_vcpu, arch.vfp_cc1));
+  DEFINE(VCPU_VFP_CC2, 		offsetof(struct kvm_vcpu, arch.vfp_cc2));
+  DEFINE(VCPU_SAVE_CC1, 	offsetof(struct kvm_vcpu, arch.vcpu_save_cc1));
+  DEFINE(VCPU_SAVE_CC2, 	offsetof(struct kvm_vcpu, arch.vcpu_save_cc2));
+  DEFINE(VCPU_REST_CC1, 	offsetof(struct kvm_vcpu, arch.vcpu_rest_cc1));
+  DEFINE(VCPU_REST_CC2, 	offsetof(struct kvm_vcpu, arch.vcpu_rest_cc2));
 #endif
 #ifdef CONFIG_ARM64_CPU_SUSPEND
   DEFINE(CPU_SUSPEND_SZ,	sizeof(struct cpu_suspend_ctx));
