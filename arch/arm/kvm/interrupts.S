@@ -98,8 +98,12 @@ ENTRY(__kvm_vcpu_run)
 
 	save_host_regs
 
+	read_ccounter r1
+	str	r1, [vcpu, #VCPU_VGIC_REST_CC1]
 	restore_vgic_state
 	restore_timer_state
+	read_ccounter r1
+	str	r1, [vcpu, #VCPU_VGIC_REST_CC2]
 
 	@ Store hardware CP15 state and load guest state
 	read_cp15_state store_to_vcpu = 0
@@ -138,6 +142,7 @@ ENTRY(__kvm_vcpu_run)
 	mcrr	p15, 6, rr_lo_hi(r2, r3), c2	@ Write VTTBR
 
 	@ We're all done, just restore the GPRs and go to the guest
+	
 	restore_guest_regs
 	clrex				@ Clear exclusive monitor
 	eret
@@ -194,8 +199,12 @@ after_vfp_restore:
 	read_cp15_state store_to_vcpu = 1
 	write_cp15_state read_from_vcpu = 0
 
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_VGIC_SAVE_CC1]
 	save_timer_state
 	save_vgic_state
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_VGIC_SAVE_CC2]
 
 	restore_host_regs
 	clrex				@ Clear exclusive monitor
@@ -396,6 +405,8 @@ THUMB(	orr	lr, #1)
 
 guest_trap:
 	load_vcpu			@ Load VCPU pointer to r0
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_WS_RET_CC1]
 	str	r1, [vcpu, #VCPU_HSR]
 
 	@ Check if we need the fault information
@@ -469,6 +480,8 @@ guest_trap:
 #ifdef CONFIG_VFPv3
 switch_to_guest_vfp:
 	load_vcpu			@ Load VCPU pointer to r0
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_VFP_CC1]
 	push	{r3-r7}
 
 	@ NEON/VFP used.  Turn on VFP access.
@@ -482,6 +495,8 @@ switch_to_guest_vfp:
 	restore_vfp_state r7
 
 	pop	{r3-r7}
+	read_ccounter r2
+	str r2, [vcpu, #VCPU_VFP_CC2]
 	pop	{r0-r2}
 	clrex
 	eret
@@ -492,6 +507,8 @@ hyp_irq:
 	push	{r0, r1, r2}
 	mov	r1, #ARM_EXCEPTION_IRQ
 	load_vcpu			@ Load VCPU pointer to r0
+	#read_ccounter r2
+	#str r2, [vcpu, #VCPU_WS_RET_CC1]
 	b	__kvm_vcpu_return
 
 	.align

@@ -63,12 +63,85 @@ static DEFINE_SPINLOCK(kvm_vmid_lock);
 
 static bool vgic_present;
 
-static unsigned long long read_cc(void)
+bool enable_ws_stats = false;
+
+static ccount_t read_cc(void)
 {
-        unsigned long cc;
+        ccount_t cc;
 
 	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
         return cc;
+}
+
+/*static void __calc_avg(struct kvm_vcpu *vcpu, u32 *oldavg,
+		unsigned long cc1, unsigned long cc2,
+		u32 *datapoints, u32 *sample)
+*/
+static void __calc_avg(struct kvm_vcpu *vcpu, ccount_t *oldavg,
+		ccount_t cc1, ccount_t cc2,
+		ccount_t *datapoints, ccount_t *sample)
+{
+	ccount_t newval, newavg;
+
+	if (cc2 <= 0)
+		return;
+
+	newval = cc2 - cc1;
+
+	if (newval <= *sample)
+		(*sample) = newval;
+	if (*datapoints == 0) {
+		*oldavg = newval;
+		return;
+	}
+	(*datapoints)++;
+	newavg = (((*oldavg) * (*datapoints - 1)) + newval) /
+		(*datapoints);
+	*oldavg = newavg;
+}
+
+#define calc_avg(_stat) __calc_avg(vcpu, &vcpu->stat._stat ## _cycles_avg, \
+		vcpu->arch._stat ## _cc1, \
+		vcpu->arch._stat ## _cc2, \
+		&vcpu->stat._stat ## _cycles_dp \
+		&vcpu->stat._stat ## _cycles)
+
+static void calc_ws_stats(struct kvm_vcpu *vcpu)
+{
+	static int init = 0;
+	ccount_t ws_cycles;
+	ccount_t vgic_rest_cycles, vgic_save_cycles, vgic_cycles;
+	ccount_t vcpu_rest_cycles, vcpu_save_cycles, vcpu_cycles;
+	ccount_t vfp_cycles;
+
+	if (!init) {
+		vcpu->stat.ws_cycles = 10000000;
+		vcpu->stat.vgic_cycles = 10000000;
+		vcpu->stat.vcpu_cycles = 10000000;
+		init = 1;
+	}
+
+	ws_cycles = (vcpu->arch.ws_ent_cc2 - vcpu->arch.ws_ent_cc1) +
+			(vcpu->arch.ws_ret_cc2 - vcpu->arch.ws_ret_cc1);
+	 /* next line is a hack! */
+	 __calc_avg(vcpu, &vcpu->stat.ws_cycles_avg, 0, ws_cycles,
+			&vcpu->stat.ws_cycles_dp, &vcpu->stat.ws_cycles);
+
+	vgic_rest_cycles = vcpu->arch.vgic_rest_cc2 - vcpu->arch.vgic_rest_cc1;
+	vgic_save_cycles = vcpu->arch.vgic_save_cc2 - vcpu->arch.vgic_save_cc1;
+	vgic_cycles = vgic_rest_cycles + vgic_save_cycles;
+	__calc_avg(vcpu, &vcpu->stat.vgic_cycles_avg, 0, vgic_cycles,
+			&vcpu->stat.vgic_cycles_dp, &vcpu->stat.vgic_cycles);
+
+	vfp_cycles = vcpu->arch.vfp_cc2 - vcpu->arch.vfp_cc1;
+	__calc_avg(vcpu, &vcpu->stat.vfp_cycles_avg, 0, vfp_cycles,
+			&vcpu->stat.vfp_cycles_dp, &vcpu->stat.vfp_cycles);
+	
+	vcpu_rest_cycles = vcpu->arch.vcpu_rest_cc2 - vcpu->arch.vcpu_rest_cc1;
+	vcpu_save_cycles = vcpu->arch.vcpu_save_cc2 - vcpu->arch.vcpu_save_cc1;
+	vcpu_cycles = vcpu_rest_cycles + vcpu_save_cycles;
+	__calc_avg(vcpu, &vcpu->stat.vcpu_cycles_avg, 0, vcpu_cycles,
+			&vcpu->stat.vcpu_cycles_dp, &vcpu->stat.vcpu_cycles);
 }
 
 static void kvm_arm_set_running_vcpu(struct kvm_vcpu *vcpu)
@@ -573,9 +646,13 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 		/*if (*vcpu_reg(vcpu, 0) == 0x10000)
                         *vcpu_reg(vcpu, 3) = read_cc();*/
-
+		vcpu->arch.ws_ent_cc1 = read_cc();
+		
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
 
+		vcpu->arch.ws_ret_cc2 = read_cc();
+		if (enable_ws_stats)
+			calc_ws_stats(vcpu);
 		/*if (*vcpu_reg(vcpu, 0) == 0x10000)
                         *vcpu_reg(vcpu, 2) = read_cc();*/
 

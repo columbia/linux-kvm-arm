@@ -89,4 +89,12 @@ struct gfn_to_hva_cache {
 	struct kvm_memory_slot *memslot;
 };
 
+#ifdef CONFIG_ARM64
+typedef unsigned long long ccount_t;
+#else
+typedef unsigned long ccount_t;
+#endif
+
+#define CYCLE_STAT(_event) ccount_t _event; ccount_t _event ## _avg; ccount_t _event ## _dp;
+
 #endif /* __KVM_TYPES_H__ */

@@ -14,6 +14,11 @@
  */
 vcpu	.req	r0		@ vcpu pointer always in r0
 
+.macro read_ccounter reg
+	mrc p15, 0, \reg, c9, c13, 0	@ PMCCNTR
+.endm
+
+
 /* Clobbers {r2-r6} */
 .macro store_vfp_state vfp_base
 	@ The VFPFMRX and VFPFMXR macros are the VMRS and VMSR instructions
@@ -159,6 +164,8 @@ vcpu	.req	r0		@ vcpu pointer always in r0
  * Clobbers *all* registers.
  */
 .macro restore_guest_regs
+	read_ccounter r1
+	str	r1, [vcpu, #VCPU_REST_CC1]
 	restore_guest_regs_mode svc, #VCPU_SVC_REGS
 	restore_guest_regs_mode abt, #VCPU_ABT_REGS
 	restore_guest_regs_mode und, #VCPU_UND_REGS
@@ -186,6 +193,11 @@ vcpu	.req	r0		@ vcpu pointer always in r0
 	ldr	r3, [vcpu, #VCPU_USR_LR]
 	msr	SP_usr, r2
 	mov	lr, r3
+
+	read_ccounter r1 
+	str	r1, [vcpu, #VCPU_WS_ENT_CC2]
+	str	r1, [vcpu, #VCPU_REST_CC2]
+
 	add	vcpu, vcpu, #(VCPU_USR_REGS)
 	ldm	vcpu, {r0-r12}
 .endm
@@ -216,6 +228,8 @@ vcpu	.req	r0		@ vcpu pointer always in r0
  */
 .macro save_guest_regs
 	@ Store usr registers
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_SAVE_CC1]
 	add	r2, vcpu, #VCPU_USR_REG(3)
 	stm	r2, {r3-r12}
 	add	r2, vcpu, #VCPU_USR_REG(0)
@@ -237,6 +251,9 @@ vcpu	.req	r0		@ vcpu pointer always in r0
 	save_guest_regs_mode abt, #VCPU_ABT_REGS
 	save_guest_regs_mode und, #VCPU_UND_REGS
 	save_guest_regs_mode irq, #VCPU_IRQ_REGS
+
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_SAVE_CC2]
 .endm
 
 /* Reads cp15 registers from hardware and stores them in memory
