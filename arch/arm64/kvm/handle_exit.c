@@ -28,22 +28,48 @@
 
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
 extern bool enable_ws_stats;
+extern void reset_ws_stats(struct kvm_vcpu *vcpu);
+
+static void dump_ws_stats(struct kvm_vcpu *vcpu)
+{
+	kvm_err("\n----- world switch stats -----\n");
+	kvm_err("WS MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.ws_cycles_min ,vcpu->stat.ws_cycles_avg
+		,vcpu->stat.ws_cycles_max);
+	kvm_err("VGIC MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.vgic_cycles_min ,vcpu->stat.vgic_cycles_avg
+		,vcpu->stat.vgic_cycles_max);
+	kvm_err("VCPU MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.vcpu_cycles_min ,vcpu->stat.vcpu_cycles_avg
+		,vcpu->stat.vcpu_cycles_max);
+	kvm_err("FPSIMD MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.fpsimd_cycles_min ,vcpu->stat.fpsimd_cycles_avg
+		,vcpu->stat.fpsimd_cycles_max);
+	kvm_err("SYSREGS MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.sysregs_cycles_min ,vcpu->stat.sysregs_cycles_avg
+		,vcpu->stat.sysregs_cycles_max);
+	kvm_err("DEBUG MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.debug_cycles_min ,vcpu->stat.debug_cycles_avg
+		,vcpu->stat.debug_cycles_max);
+	kvm_err("EN/DISABLE VM MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.vm_cycles_min ,vcpu->stat.vm_cycles_avg
+		,vcpu->stat.vm_cycles_max);
+	kvm_err("GUES32 S/R MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.g32_cycles_min ,vcpu->stat.g32_cycles_avg
+		,vcpu->stat.g32_cycles_max);
+	kvm_err("\n----- ------------------ -----\n");
+}
 
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
-	u32 tmp;
 
 	if (*vcpu_reg(vcpu, 0) == 0x10000) {
 		enable_ws_stats = true;	
 		return 1;
 	} else if (*vcpu_reg(vcpu, 0) == 0x11000) {
-		kvm_err("WS MIN %llu AVG %llu\n" ,vcpu->stat.ws_cycles ,vcpu->stat.ws_cycles_avg);
-		kvm_err("VGIC MIN %llu AVG %llu\n" ,vcpu->stat.vgic_cycles ,vcpu->stat.vgic_cycles_avg);
-		kvm_err("VCPU MIN %llu AVG %llu\n" ,vcpu->stat.vcpu_cycles ,vcpu->stat.vcpu_cycles_avg);
-		vcpu->stat.ws_cycles = 10000000;
-		vcpu->stat.vgic_cycles = 10000000;
-		vcpu->stat.vcpu_cycles = 10000000;
+		dump_ws_stats(vcpu);
+		reset_ws_stats(vcpu);	
 		enable_ws_stats = false;	
 		return 1;
 	}

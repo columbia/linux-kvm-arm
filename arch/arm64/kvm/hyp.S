@@ -37,7 +37,7 @@
 	.align	PAGE_SHIFT
 
 .macro read_ccounter reg
-mrs \reg, PMCCNTR_EL0
+	mrs \reg, PMCCNTR_EL0
 .endm
 
 .macro save_common_regs
@@ -946,14 +946,33 @@ ENTRY(__kvm_vcpu_run)
 	kern_hyp_va x2
 
 	save_host_regs
+	read_ccounter x1
+	str	x1, [x0, #VCPU_FPSIMD_SAVE_CC1]
 	bl __save_fpsimd
+	read_ccounter x1
+	str	x1, [x0, #VCPU_FPSIMD_SAVE_CC2]
+	read_ccounter x1
+	str	x1, [x0, #VCPU_SYSREG_SAVE_CC1]
 	bl __save_sysregs
+	read_ccounter x1
+	str	x1, [x0, #VCPU_SYSREG_SAVE_CC2]
 
+	read_ccounter x1
+	str	x1, [x0, #VCPU_DEBUG_SAVE_CC1]
 	compute_debug_state 1f
 	bl	__save_debug
+	
 1:
+	read_ccounter x1
+	str	x1, [x0, #VCPU_DEBUG_SAVE_CC2]
+
+	read_ccounter x1
+	str	x1, [x0, #VCPU_VM_ACT_CC1]
 	activate_traps
 	activate_vm
+	read_ccounter x1
+	str	x1, [x0, #VCPU_VM_ACT_CC2]
+
 
 	read_ccounter x2
 	str	x2, [x0, #VCPU_VGIC_REST_CC1]
@@ -965,13 +984,31 @@ ENTRY(__kvm_vcpu_run)
 	// Guest context
 	add	x2, x0, #VCPU_CONTEXT
 
+	read_ccounter x1
+	str	x1, [x0, #VCPU_SYSREG_REST_CC1]
 	bl __restore_sysregs
+	read_ccounter x1
+	str	x1, [x0, #VCPU_SYSREG_REST_CC2]
+	read_ccounter x1
+	str	x1, [x0, #VCPU_FPSIMD_REST_CC1]
 	bl __restore_fpsimd
+	read_ccounter x1
+	str	x1, [x0, #VCPU_FPSIMD_REST_CC2]
 
+	read_ccounter x3
+	str	x3, [x0, #VCPU_DEBUG_REST_CC1]
 	skip_debug_state x3, 1f
 	bl	__restore_debug
+	
 1:
+	read_ccounter x3
+	str	x3, [x0, #VCPU_DEBUG_REST_CC2]
+	read_ccounter x3
+	str	x3, [x0, #VCPU_G32_REST_CC1]
 	restore_guest_32bit_state
+	read_ccounter x3
+	str	x3, [x0, #VCPU_G32_REST_CC2]
+
 	restore_guest_regs
 
 	// That's it, no more messing around.
@@ -985,13 +1022,31 @@ __kvm_vcpu_return:
 	add	x2, x0, #VCPU_CONTEXT
 
 	save_guest_regs
+	read_ccounter x3
+	str	x3, [x0, #VCPU_FPSIMD_SAVE_CC1]
 	bl __save_fpsimd
+	read_ccounter x3
+	str	x3, [x0, #VCPU_FPSIMD_SAVE_CC2]
+	read_ccounter x3
+	str	x3, [x0, #VCPU_SYSREG_SAVE_CC1]
 	bl __save_sysregs
+	read_ccounter x3
+	str	x3, [x0, #VCPU_SYSREG_SAVE_CC2]
 
+	read_ccounter x3
+	str	x3, [x0, #VCPU_DEBUG_SAVE_CC1]
 	skip_debug_state x3, 1f
 	bl	__save_debug
+
 1:
+	read_ccounter x3
+	str	x3, [x0, #VCPU_DEBUG_SAVE_CC2]
+
+	read_ccounter x3
+	str	x3, [x0, #VCPU_G32_SAVE_CC1]
 	save_guest_32bit_state
+	read_ccounter x3
+	str	x3, [x0, #VCPU_G32_SAVE_CC2]
 
 	read_ccounter x2
 	str	x2, [x0, #VCPU_VGIC_SAVE_CC1]
@@ -1000,23 +1055,41 @@ __kvm_vcpu_return:
 	read_ccounter x2
 	str	x2, [x0, #VCPU_VGIC_SAVE_CC2]
 
+	read_ccounter x2
+	str	x2, [x0, #VCPU_VM_DACT_CC1]
 	deactivate_traps
 	deactivate_vm
+	read_ccounter x2
+	str	x2, [x0, #VCPU_VM_DACT_CC2]
 
 	// Host context
 	ldr	x2, [x0, #VCPU_HOST_CONTEXT]
 	kern_hyp_va x2
 
+	read_ccounter x3
+	str	x3, [x0, #VCPU_SYSREG_REST_CC1]
 	bl __restore_sysregs
+	read_ccounter x3
+	str	x3, [x0, #VCPU_SYSREG_REST_CC2]
+	read_ccounter x3
+	str	x3, [x0, #VCPU_FPSIMD_REST_CC1]
 	bl __restore_fpsimd
+	read_ccounter x3
+	str	x3, [x0, #VCPU_FPSIMD_REST_CC2]
 
+	read_ccounter x3
+	str	x3, [x0, #VCPU_DEBUG_REST_CC1]
 	skip_debug_state x3, 1f
 	// Clear the dirty flag for the next run, as all the state has
 	// already been saved. Note that we nuke the whole 64bit word.
 	// If we ever add more flags, we'll have to be more careful...
 	str	xzr, [x0, #VCPU_DEBUG_FLAGS]
 	bl	__restore_debug
+	
 1:
+	read_ccounter x3
+	str	x3, [x0, #VCPU_DEBUG_REST_CC2]
+
 	restore_host_regs
 
 	mov	x0, x1

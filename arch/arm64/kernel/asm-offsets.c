@@ -160,12 +160,35 @@ int main(void)
   DEFINE(VCPU_VGIC_REST_CC2, 	offsetof(struct kvm_vcpu, arch.vgic_rest_cc2));
   DEFINE(VCPU_VGIC_SAVE_CC1, 	offsetof(struct kvm_vcpu, arch.vgic_save_cc1));
   DEFINE(VCPU_VGIC_SAVE_CC2, 	offsetof(struct kvm_vcpu, arch.vgic_save_cc2));
-  DEFINE(VCPU_VFP_CC1, 		offsetof(struct kvm_vcpu, arch.vfp_cc1));
-  DEFINE(VCPU_VFP_CC2, 		offsetof(struct kvm_vcpu, arch.vfp_cc2));
   DEFINE(VCPU_SAVE_CC1, 	offsetof(struct kvm_vcpu, arch.vcpu_save_cc1));
   DEFINE(VCPU_SAVE_CC2, 	offsetof(struct kvm_vcpu, arch.vcpu_save_cc2));
   DEFINE(VCPU_REST_CC1, 	offsetof(struct kvm_vcpu, arch.vcpu_rest_cc1));
   DEFINE(VCPU_REST_CC2, 	offsetof(struct kvm_vcpu, arch.vcpu_rest_cc2));
+  DEFINE(VCPU_FPSIMD_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.fpsimd_save_cc1));
+  DEFINE(VCPU_FPSIMD_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.fpsimd_save_cc2));
+  DEFINE(VCPU_FPSIMD_REST_CC1,	offsetof(struct kvm_vcpu, arch.fpsimd_rest_cc1));
+  DEFINE(VCPU_FPSIMD_REST_CC2,	offsetof(struct kvm_vcpu, arch.fpsimd_rest_cc2));
+  DEFINE(VCPU_SYSREG_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.sysregs_save_cc1));
+  DEFINE(VCPU_SYSREG_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.sysregs_save_cc2));
+  DEFINE(VCPU_SYSREG_REST_CC1,	offsetof(struct kvm_vcpu, arch.sysregs_rest_cc1));
+  DEFINE(VCPU_SYSREG_REST_CC2,	offsetof(struct kvm_vcpu, arch.sysregs_rest_cc2));
+  DEFINE(VCPU_DEBUG_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.debug_save_cc1));
+  DEFINE(VCPU_DEBUG_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.debug_save_cc2));
+  DEFINE(VCPU_DEBUG_REST_CC1,	offsetof(struct kvm_vcpu, arch.debug_rest_cc1));
+  DEFINE(VCPU_DEBUG_REST_CC2,	offsetof(struct kvm_vcpu, arch.debug_rest_cc2));
+  DEFINE(VCPU_HOST_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.host_save_cc1));
+  DEFINE(VCPU_HOST_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.host_save_cc2));
+  DEFINE(VCPU_HOST_REST_CC1,	offsetof(struct kvm_vcpu, arch.host_rest_cc1));
+  DEFINE(VCPU_HOST_REST_CC2,	offsetof(struct kvm_vcpu, arch.host_rest_cc2));
+  DEFINE(VCPU_VM_ACT_CC1,	offsetof(struct kvm_vcpu, arch.activate_vm_cc1));
+  DEFINE(VCPU_VM_ACT_CC2,	offsetof(struct kvm_vcpu, arch.activate_vm_cc2));
+  DEFINE(VCPU_VM_DACT_CC1,	offsetof(struct kvm_vcpu, arch.deactivate_vm_cc1));
+  DEFINE(VCPU_VM_DACT_CC2,	offsetof(struct kvm_vcpu, arch.deactivate_vm_cc2));
+  DEFINE(VCPU_G32_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.g32_save_cc1));
+  DEFINE(VCPU_G32_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.g32_save_cc2));
+  DEFINE(VCPU_G32_REST_CC1,	offsetof(struct kvm_vcpu, arch.g32_rest_cc1));
+  DEFINE(VCPU_G32_REST_CC2,	offsetof(struct kvm_vcpu, arch.g32_rest_cc2));
+
 #endif
 #ifdef CONFIG_ARM64_CPU_SUSPEND
   DEFINE(CPU_SUSPEND_SZ,	sizeof(struct cpu_suspend_ctx));

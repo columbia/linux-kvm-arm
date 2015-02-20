@@ -76,23 +76,21 @@ static ccount_t read_cc(void)
 	return cc;
 }
 
-/*static void __calc_avg(struct kvm_vcpu *vcpu, u32 *oldavg,
-		unsigned long cc1, unsigned long cc2,
-		u32 *datapoints, u32 *sample)
-*/
 static void __calc_avg(struct kvm_vcpu *vcpu, ccount_t *oldavg,
-		ccount_t cc1, ccount_t cc2,
-		ccount_t *datapoints, ccount_t *sample)
+		ccount_t newval, ccount_t *datapoints, 
+		ccount_t *min, ccount_t *max)
 {
-	ccount_t newval, newavg;
+	ccount_t newavg;
 
-	if (cc2 <= 0)
+	if (newval <= 0)
 		return;
 
-	newval = cc2 - cc1;
+	/* Get Min Max */	
+	if ((newval < *min) || (*min == 0))
+		(*min) = newval;
+	if(newval > *max)
+		(*max) = newval;
 
-	if (newval <= *sample)
-		(*sample) = newval;
 	if (*datapoints == 0) {
 		*oldavg = newval;
 		return;
@@ -103,48 +101,104 @@ static void __calc_avg(struct kvm_vcpu *vcpu, ccount_t *oldavg,
 	*oldavg = newavg;
 }
 
-#define calc_avg(_stat) __calc_avg(vcpu, &vcpu->stat._stat ## _cycles_avg, \
-		vcpu->arch._stat ## _cc1, \
-		vcpu->arch._stat ## _cc2, \
-		&vcpu->stat._stat ## _cycles_dp \
-		&vcpu->stat._stat ## _cycles)
+static void __calc_avg_pair(struct kvm_vcpu *vcpu, ccount_t *oldavg,
+		ccount_t cc1_s, ccount_t cc2_s,
+		ccount_t cc1_r, ccount_t cc2_r,
+		ccount_t *datapoints, ccount_t *min, ccount_t *max)
+{
+	ccount_t newsave, newrest, newavg, newval;
+
+	newsave = cc2_s - cc1_s;
+	newrest = cc2_r - cc1_r;
+	newval = newsave + newrest;
+
+	if (newval <= 0)
+		return;
+
+	/* Get Min Max */	
+	if ((newval < *min) || (*min == 0))
+		(*min) = newval;
+	if(newval > *max)
+		(*max) = newval;
+
+	if (*datapoints == 0) {
+		*oldavg = newval;
+		return;
+	}
+	(*datapoints)++;
+	newavg = (((*oldavg) * (*datapoints - 1)) + newval) /
+		(*datapoints);
+	*oldavg = newavg;
+}
+
+#define calc_avg_pair(_stat) __calc_avg_pair(vcpu, \
+		&vcpu->stat._stat ## _cycles_avg, \
+		vcpu->arch._stat ## _save_cc1, \
+		vcpu->arch._stat ## _save_cc2, \
+		vcpu->arch._stat ## _rest_cc1, \
+		vcpu->arch._stat ## _rest_cc2, \
+		&vcpu->stat._stat ## _cycles_dp, \
+		&vcpu->stat._stat ## _cycles_min, \
+		&vcpu->stat._stat ## _cycles_max)
+
+void reset_ws_stats(struct kvm_vcpu *vcpu)
+{
+	vcpu->stat.ws_cycles_min = 0;
+	vcpu->stat.vgic_cycles_min = 0;
+	vcpu->stat.vcpu_cycles_min = 0;
+	vcpu->stat.fpsimd_cycles_min = 0;
+	vcpu->stat.sysregs_cycles_min = 0;
+	vcpu->stat.debug_cycles_min = 0;
+	vcpu->stat.vm_cycles_min = 0;
+	vcpu->stat.g32_cycles_min = 0;
+	vcpu->stat.ws_cycles_max= 0;
+	vcpu->stat.vgic_cycles_max = 0;
+	vcpu->stat.vcpu_cycles_max = 0;
+	vcpu->stat.fpsimd_cycles_max = 0;
+	vcpu->stat.sysregs_cycles_max = 0;
+	vcpu->stat.debug_cycles_max = 0;
+	vcpu->stat.vm_cycles_max = 0;
+	vcpu->stat.g32_cycles_max = 0;
+}
 
 static void calc_ws_stats(struct kvm_vcpu *vcpu)
 {
 	static int init = 0;
 	ccount_t ws_cycles;
-	ccount_t vgic_rest_cycles, vgic_save_cycles, vgic_cycles;
-	ccount_t vcpu_rest_cycles, vcpu_save_cycles, vcpu_cycles;
-	ccount_t vfp_cycles;
+	ccount_t vm_act_cycles, vm_dact_cycles, vm_cycles;
 
 	if (!init) {
-		vcpu->stat.ws_cycles = 10000000;
-		vcpu->stat.vgic_cycles = 10000000;
-		vcpu->stat.vcpu_cycles = 10000000;
+		reset_ws_stats(vcpu);
 		init = 1;
 	}
 
 	ws_cycles = (vcpu->arch.ws_ent_cc2 - vcpu->arch.ws_ent_cc1) +
 			(vcpu->arch.ws_ret_cc2 - vcpu->arch.ws_ret_cc1);
+	__calc_avg(vcpu, &vcpu->stat.ws_cycles_avg, ws_cycles,
+			&vcpu->stat.ws_cycles_dp, &vcpu->stat.ws_cycles_min,
+			&vcpu->stat.ws_cycles_max);
 	 /* next line is a hack! */
-	 __calc_avg(vcpu, &vcpu->stat.ws_cycles_avg, 0, ws_cycles,
-			&vcpu->stat.ws_cycles_dp, &vcpu->stat.ws_cycles);
+	 /*__calc_avg(vcpu, &vcpu->stat.ws_cycles_avg, 0, ws_cycles,
+			&vcpu->stat.ws_cycles_dp, &vcpu->stat.ws_cycles);*/
 
-	vgic_rest_cycles = vcpu->arch.vgic_rest_cc2 - vcpu->arch.vgic_rest_cc1;
-	vgic_save_cycles = vcpu->arch.vgic_save_cc2 - vcpu->arch.vgic_save_cc1;
-	vgic_cycles = vgic_rest_cycles + vgic_save_cycles;
-	__calc_avg(vcpu, &vcpu->stat.vgic_cycles_avg, 0, vgic_cycles,
-			&vcpu->stat.vgic_cycles_dp, &vcpu->stat.vgic_cycles);
-
-	vfp_cycles = vcpu->arch.vfp_cc2 - vcpu->arch.vfp_cc1;
-	__calc_avg(vcpu, &vcpu->stat.vfp_cycles_avg, 0, vfp_cycles,
-			&vcpu->stat.vfp_cycles_dp, &vcpu->stat.vfp_cycles);
+	calc_avg_pair(vgic);
+	calc_avg_pair(vcpu);
 	
-	vcpu_rest_cycles = vcpu->arch.vcpu_rest_cc2 - vcpu->arch.vcpu_rest_cc1;
-	vcpu_save_cycles = vcpu->arch.vcpu_save_cc2 - vcpu->arch.vcpu_save_cc1;
-	vcpu_cycles = vcpu_rest_cycles + vcpu_save_cycles;
-	__calc_avg(vcpu, &vcpu->stat.vcpu_cycles_avg, 0, vcpu_cycles,
-			&vcpu->stat.vcpu_cycles_dp, &vcpu->stat.vcpu_cycles);
+#ifdef CONFIG_ARM64
+	calc_avg_pair(fpsimd);
+	calc_avg_pair(sysregs);
+	calc_avg_pair(debug);
+	calc_avg_pair(g32);
+
+	vm_cycles = (vcpu->arch.activate_vm_cc2 - vcpu->arch.activate_vm_cc1) +
+			(vcpu->arch.deactivate_vm_cc2 - vcpu->arch.deactivate_vm_cc1); 
+	/*vm_act_cycles = vcpu->arch.activate_vm_cc2 - vcpu->arch.activate_vm_cc1;
+	vm_dact_cycles = vcpu->arch.deactivate_vm_cc2 - vcpu->arch.deactivate_vm_cc1;
+	vm_cycles = vm_act_cycles + vm_dact_cycles;*/
+	__calc_avg(vcpu, &vcpu->stat.vm_cycles_avg, vm_cycles,
+			&vcpu->stat.vm_cycles_dp, &vcpu->stat.vm_cycles_min,
+			&vcpu->stat.vm_cycles_max);
+#endif
 }
 
 static void kvm_arm_set_running_vcpu(struct kvm_vcpu *vcpu)

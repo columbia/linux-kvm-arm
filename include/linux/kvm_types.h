@@ -95,6 +95,7 @@ typedef unsigned long long ccount_t;
 typedef unsigned long ccount_t;
 #endif
 
-#define CYCLE_STAT(_event) ccount_t _event; ccount_t _event ## _avg; ccount_t _event ## _dp;
+#define CYCLE_STAT(_event) ccount_t _event ## _min; ccount_t _event ## _max; \
+			ccount_t _event ## _avg; ccount_t _event ## _dp;
 
 #endif /* __KVM_TYPES_H__ */

@@ -147,12 +147,34 @@ struct kvm_vcpu_arch {
 	ccount_t vgic_rest_cc2;
 	ccount_t vgic_save_cc1;
 	ccount_t vgic_save_cc2;
-	ccount_t vfp_cc1;
-	ccount_t vfp_cc2;
 	ccount_t vcpu_save_cc1;
 	ccount_t vcpu_save_cc2;
 	ccount_t vcpu_rest_cc1;
 	ccount_t vcpu_rest_cc2;
+	ccount_t fpsimd_save_cc1;
+	ccount_t fpsimd_save_cc2;
+	ccount_t fpsimd_rest_cc1;
+	ccount_t fpsimd_rest_cc2;
+	ccount_t sysregs_save_cc1;
+	ccount_t sysregs_save_cc2;
+	ccount_t sysregs_rest_cc1;
+	ccount_t sysregs_rest_cc2;
+	ccount_t debug_save_cc1;
+	ccount_t debug_save_cc2;
+	ccount_t debug_rest_cc1;
+	ccount_t debug_rest_cc2;
+	ccount_t host_save_cc1;
+	ccount_t host_save_cc2;
+	ccount_t host_rest_cc1;
+	ccount_t host_rest_cc2;
+	ccount_t activate_vm_cc1;
+	ccount_t activate_vm_cc2;
+	ccount_t deactivate_vm_cc1;
+	ccount_t deactivate_vm_cc2;
+	ccount_t g32_save_cc1;
+	ccount_t g32_save_cc2;
+	ccount_t g32_rest_cc1;
+	ccount_t g32_rest_cc2;
 
 };
 
@@ -184,8 +206,12 @@ struct kvm_vcpu_stat {
 	CYCLE_STAT(hyp_ret_cycles);
 	CYCLE_STAT(vgic_cycles);
 	CYCLE_STAT(vcpu_cycles);
-	CYCLE_STAT(vfp_cycles);
-	CYCLE_STAT(abt_cycles);
+	CYCLE_STAT(sysregs_cycles);
+	CYCLE_STAT(fpsimd_cycles);
+	CYCLE_STAT(debug_cycles);
+	CYCLE_STAT(host_cycles);
+	CYCLE_STAT(vm_cycles);
+	CYCLE_STAT(g32_cycles);
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,
