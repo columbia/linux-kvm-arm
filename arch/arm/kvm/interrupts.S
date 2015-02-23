@@ -105,9 +105,13 @@ ENTRY(__kvm_vcpu_run)
 	read_ccounter r1
 	str	r1, [vcpu, #VCPU_VGIC_REST_CC2]
 
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_CP15_REST_CC1]
 	@ Store hardware CP15 state and load guest state
 	read_cp15_state store_to_vcpu = 0
 	write_cp15_state read_from_vcpu = 1
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_CP15_REST_CC2]
 
 	@ If the host kernel has not been configured with VFPv3 support,
 	@ then it is safer if we deny guests from using it as well.
@@ -118,7 +122,8 @@ ENTRY(__kvm_vcpu_run)
 	orr	r2, r2, #FPEXC_EN
 	VFPFMXR FPEXC, r2		@ VMSR
 #endif
-
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_VM_ACT_CC1]
 	@ Configure Hyp-role
 	configure_hyp_role vmentry
 
@@ -142,7 +147,9 @@ ENTRY(__kvm_vcpu_run)
 	mcrr	p15, 6, rr_lo_hi(r2, r3), c2	@ Write VTTBR
 
 	@ We're all done, just restore the GPRs and go to the guest
-	
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_VM_ACT_CC2]
+
 	restore_guest_regs
 	clrex				@ Clear exclusive monitor
 	eret
@@ -155,6 +162,9 @@ __kvm_vcpu_return:
 	 * r1: exception code
 	 */
 	save_guest_regs
+
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_VM_DACT_CC1]
 
 	@ Set VMID == 0
 	mov	r2, #0
@@ -195,9 +205,16 @@ after_vfp_restore:
 	mrc	p15, 0, r2, c0, c0, 5
 	mcr	p15, 4, r2, c0, c0, 5
 
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_VM_DACT_CC2]
+
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_CP15_SAVE_CC1]
 	@ Store guest CP15 state and restore host state
 	read_cp15_state store_to_vcpu = 1
 	write_cp15_state read_from_vcpu = 0
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_CP15_SAVE_CC2]
 
 	read_ccounter r2
 	str	r2, [vcpu, #VCPU_VGIC_SAVE_CC1]

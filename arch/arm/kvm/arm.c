@@ -141,31 +141,86 @@ static void __calc_avg_pair(struct kvm_vcpu *vcpu, ccount_t *oldavg,
 		&vcpu->stat._stat ## _cycles_min, \
 		&vcpu->stat._stat ## _cycles_max)
 
+void dump_ws_stats(struct kvm_vcpu *vcpu)
+{
+	kvm_err("\n----- world switch stats -----\n");
+#ifdef CONFIG_ARM64
+	kvm_err("WS MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.ws_cycles_min ,vcpu->stat.ws_cycles_avg
+		,vcpu->stat.ws_cycles_max);
+	kvm_err("VGIC MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.vgic_cycles_min ,vcpu->stat.vgic_cycles_avg
+		,vcpu->stat.vgic_cycles_max);
+	kvm_err("VCPU MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.vcpu_cycles_min ,vcpu->stat.vcpu_cycles_avg
+		,vcpu->stat.vcpu_cycles_max);
+	kvm_err("FPSIMD MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.fpsimd_cycles_min ,vcpu->stat.fpsimd_cycles_avg
+		,vcpu->stat.fpsimd_cycles_max);
+	kvm_err("SYSREGS MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.sysregs_cycles_min ,vcpu->stat.sysregs_cycles_avg
+		,vcpu->stat.sysregs_cycles_max);
+	kvm_err("DEBUG MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.debug_cycles_min ,vcpu->stat.debug_cycles_avg
+		,vcpu->stat.debug_cycles_max);
+	kvm_err("EN/DISABLE VM MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.vm_cycles_min ,vcpu->stat.vm_cycles_avg
+		,vcpu->stat.vm_cycles_max);
+	kvm_err("GUES32 S/R MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.g32_cycles_min ,vcpu->stat.g32_cycles_avg
+		,vcpu->stat.g32_cycles_max);
+#elif CONFIG_ARM
+	kvm_err("WS MIN %lu AVG %lu MAX %lu\n" 
+		,vcpu->stat.ws_cycles_min ,vcpu->stat.ws_cycles_avg
+		,vcpu->stat.ws_cycles_max);
+	kvm_err("VGIC MIN %lu AVG %lu MAX %lu\n" 
+		,vcpu->stat.vgic_cycles_min ,vcpu->stat.vgic_cycles_avg
+		,vcpu->stat.vgic_cycles_max);
+	kvm_err("VCPU MIN %lu AVG %lu MAX %lu\n" 
+		,vcpu->stat.vcpu_cycles_min ,vcpu->stat.vcpu_cycles_avg
+		,vcpu->stat.vcpu_cycles_max);
+	kvm_err("EN/DISABLE VM MIN %lu AVG %lu MAX %lu\n" 
+		,vcpu->stat.vm_cycles_min ,vcpu->stat.vm_cycles_avg
+		,vcpu->stat.vm_cycles_max);
+	kvm_err("CP15 S/R MIN %lu AVG %lu MAX %lu\n" 
+		,vcpu->stat.cp15_cycles_min ,vcpu->stat.cp15_cycles_avg
+		,vcpu->stat.cp15_cycles_max);
+
+#endif
+	kvm_err("\n----- ------------------ -----\n");
+}
+
 void reset_ws_stats(struct kvm_vcpu *vcpu)
 {
 	vcpu->stat.ws_cycles_min = 0;
-	vcpu->stat.vgic_cycles_min = 0;
-	vcpu->stat.vcpu_cycles_min = 0;
-	vcpu->stat.fpsimd_cycles_min = 0;
-	vcpu->stat.sysregs_cycles_min = 0;
-	vcpu->stat.debug_cycles_min = 0;
-	vcpu->stat.vm_cycles_min = 0;
-	vcpu->stat.g32_cycles_min = 0;
 	vcpu->stat.ws_cycles_max= 0;
+	vcpu->stat.vgic_cycles_min = 0;
 	vcpu->stat.vgic_cycles_max = 0;
+	vcpu->stat.vcpu_cycles_min = 0;
 	vcpu->stat.vcpu_cycles_max = 0;
-	vcpu->stat.fpsimd_cycles_max = 0;
-	vcpu->stat.sysregs_cycles_max = 0;
-	vcpu->stat.debug_cycles_max = 0;
+	vcpu->stat.vm_cycles_min = 0;
 	vcpu->stat.vm_cycles_max = 0;
+
+#ifdef CONFIG_ARM64
+	vcpu->stat.fpsimd_cycles_min = 0;
+	vcpu->stat.fpsimd_cycles_max = 0;
+	vcpu->stat.sysregs_cycles_min = 0;
+	vcpu->stat.sysregs_cycles_max = 0;
+	vcpu->stat.debug_cycles_min = 0;
+	vcpu->stat.debug_cycles_max = 0;
+	vcpu->stat.g32_cycles_min = 0;
 	vcpu->stat.g32_cycles_max = 0;
+#elif CONFIG_ARM
+	vcpu->stat.cp15_cycles_min = 0;
+	vcpu->stat.cp15_cycles_max = 0;
+#endif
 }
 
 static void calc_ws_stats(struct kvm_vcpu *vcpu)
 {
 	static int init = 0;
-	ccount_t ws_cycles;
-	ccount_t vm_act_cycles, vm_dact_cycles, vm_cycles;
+	ccount_t ws_cycles, vm_cycles;
+	//ccount_t vm_act_cycles, vm_dact_cycles, vm_cycles;
 
 	if (!init) {
 		reset_ws_stats(vcpu);
@@ -195,6 +250,14 @@ static void calc_ws_stats(struct kvm_vcpu *vcpu)
 	/*vm_act_cycles = vcpu->arch.activate_vm_cc2 - vcpu->arch.activate_vm_cc1;
 	vm_dact_cycles = vcpu->arch.deactivate_vm_cc2 - vcpu->arch.deactivate_vm_cc1;
 	vm_cycles = vm_act_cycles + vm_dact_cycles;*/
+	__calc_avg(vcpu, &vcpu->stat.vm_cycles_avg, vm_cycles,
+			&vcpu->stat.vm_cycles_dp, &vcpu->stat.vm_cycles_min,
+			&vcpu->stat.vm_cycles_max);
+#elif CONFIG_ARM
+	calc_avg_pair(cp15);
+
+	vm_cycles = (vcpu->arch.activate_vm_cc2 - vcpu->arch.activate_vm_cc1) +
+			(vcpu->arch.deactivate_vm_cc2 - vcpu->arch.deactivate_vm_cc1); 
 	__calc_avg(vcpu, &vcpu->stat.vm_cycles_avg, vm_cycles,
 			&vcpu->stat.vm_cycles_dp, &vcpu->stat.vm_cycles_min,
 			&vcpu->stat.vm_cycles_max);
@@ -583,7 +646,7 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
                         "orr %0, %0, #(1 << 31)\n"      /* Enable Cycle cnt */
                         "mcr p15, 0, %0, c9, c12, 1\n"  /* PMCNTENSET */
                         : "=r" (tmp));
-#elif CONFIG_ARM64
+#else
 	asm volatile(	"mrs %0, PMCR_EL0\n"
 			"orr %0, %0, #1\n"
 			"orr %0, %0, #(1 << 2)\n"
