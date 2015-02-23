@@ -156,10 +156,14 @@ int main(void)
   DEFINE(VCPU_WS_ENT_CC2, 	offsetof(struct kvm_vcpu, arch.ws_ent_cc2));
   DEFINE(VCPU_WS_RET_CC1, 	offsetof(struct kvm_vcpu, arch.ws_ret_cc1));
   DEFINE(VCPU_WS_RET_CC2, 	offsetof(struct kvm_vcpu, arch.ws_ret_cc2));
-  DEFINE(VCPU_VGIC_REST_CC1, 	offsetof(struct kvm_vcpu, arch.vgic_rest_cc1));
-  DEFINE(VCPU_VGIC_REST_CC2, 	offsetof(struct kvm_vcpu, arch.vgic_rest_cc2));
   DEFINE(VCPU_VGIC_SAVE_CC1, 	offsetof(struct kvm_vcpu, arch.vgic_save_cc1));
   DEFINE(VCPU_VGIC_SAVE_CC2, 	offsetof(struct kvm_vcpu, arch.vgic_save_cc2));
+  DEFINE(VCPU_VGIC_REST_CC1, 	offsetof(struct kvm_vcpu, arch.vgic_rest_cc1));
+  DEFINE(VCPU_VGIC_REST_CC2, 	offsetof(struct kvm_vcpu, arch.vgic_rest_cc2));
+  DEFINE(VCPU_TIMER_SAVE_CC1, 	offsetof(struct kvm_vcpu, arch.timer_save_cc1));
+  DEFINE(VCPU_TIMER_SAVE_CC2, 	offsetof(struct kvm_vcpu, arch.timer_save_cc2));
+  DEFINE(VCPU_TIMER_REST_CC1, 	offsetof(struct kvm_vcpu, arch.timer_rest_cc1));
+  DEFINE(VCPU_TIMER_REST_CC2, 	offsetof(struct kvm_vcpu, arch.timer_rest_cc2));
   DEFINE(VCPU_SAVE_CC1, 	offsetof(struct kvm_vcpu, arch.vcpu_save_cc1));
   DEFINE(VCPU_SAVE_CC2, 	offsetof(struct kvm_vcpu, arch.vcpu_save_cc2));
   DEFINE(VCPU_REST_CC1, 	offsetof(struct kvm_vcpu, arch.vcpu_rest_cc1));

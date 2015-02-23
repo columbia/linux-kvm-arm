@@ -977,9 +977,13 @@ ENTRY(__kvm_vcpu_run)
 	read_ccounter x2
 	str	x2, [x0, #VCPU_VGIC_REST_CC1]
 	restore_vgic_state
-	restore_timer_state
 	read_ccounter x2
 	str	x2, [x0, #VCPU_VGIC_REST_CC2]
+	read_ccounter x2
+	str	x2, [x0, #VCPU_TIMER_REST_CC1]
+	restore_timer_state
+	read_ccounter x2
+	str	x2, [x0, #VCPU_TIMER_REST_CC2]
 
 	// Guest context
 	add	x2, x0, #VCPU_CONTEXT
@@ -1048,9 +1052,13 @@ __kvm_vcpu_return:
 	read_ccounter x3
 	str	x3, [x0, #VCPU_G32_SAVE_CC2]
 
+	str	x3, [x0, #VCPU_TIMER_SAVE_CC1]
+	save_timer_state
+	read_ccounter x3
+	str	x3, [x0, #VCPU_TIMER_SAVE_CC2]
+	
 	read_ccounter x2
 	str	x2, [x0, #VCPU_VGIC_SAVE_CC1]
-	save_timer_state
 	save_vgic_state
 	read_ccounter x2
 	str	x2, [x0, #VCPU_VGIC_SAVE_CC2]

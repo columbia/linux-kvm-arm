@@ -147,6 +147,10 @@ struct kvm_vcpu_arch {
 	ccount_t vgic_rest_cc2;
 	ccount_t vgic_save_cc1;
 	ccount_t vgic_save_cc2;
+	ccount_t timer_rest_cc1;
+	ccount_t timer_rest_cc2;
+	ccount_t timer_save_cc1;
+	ccount_t timer_save_cc2;
 	ccount_t vcpu_save_cc1;
 	ccount_t vcpu_save_cc2;
 	ccount_t vcpu_rest_cc1;
@@ -205,6 +209,7 @@ struct kvm_vcpu_stat {
 	CYCLE_STAT(hyp_ent_cycles);
 	CYCLE_STAT(hyp_ret_cycles);
 	CYCLE_STAT(vgic_cycles);
+	CYCLE_STAT(timer_cycles);
 	CYCLE_STAT(vcpu_cycles);
 	CYCLE_STAT(sysregs_cycles);
 	CYCLE_STAT(fpsimd_cycles);
