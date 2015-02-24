@@ -47,6 +47,7 @@
 	// are now visible to the system register interface
 	dsb	st
 
+
 	// Save all interesting registers
 	mrs_s	x4, ICH_HCR_EL2
 	mrs_s	x5, ICH_VMCR_EL2
@@ -134,7 +135,7 @@
 5:	mrs_s	x17, ICH_AP1R0_EL2
 	str	w17, [x3, #VGIC_V3_CPU_AP1R]
 
-	// Restore SRE_EL1 access and re-enable SRE at EL1.
+// Restore SRE_EL1 access and re-enable SRE at EL1.
 	mrs_s	x5, ICC_SRE_EL2
 	orr	x5, x5, #ICC_SRE_EL2_ENABLE
 	msr_s	ICC_SRE_EL2, x5

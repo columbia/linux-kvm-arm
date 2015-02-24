@@ -830,7 +830,12 @@
 	mov	x25, #HCR_INT_OVERRIDE
 	neg	x25, x25
 	and	x24, x24, x25
+	read_ccounter x4
+	str	x4, [x0, #GIC_INT_SAVE_CC1]
 	msr	hcr_el2, x24
+	read_ccounter x4
+	str	x4, [x0, #GIC_INT_SAVE_CC2]
+
 .endm
 
 /*

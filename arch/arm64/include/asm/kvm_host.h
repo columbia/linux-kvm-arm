@@ -179,7 +179,11 @@ struct kvm_vcpu_arch {
 	ccount_t g32_save_cc2;
 	ccount_t g32_rest_cc1;
 	ccount_t g32_rest_cc2;
-
+	/* GIC */
+	ccount_t gic_int_save_cc1;
+	ccount_t gic_int_save_cc2;
+	ccount_t gic_list_save_cc1;
+	ccount_t gic_list_save_cc2;
 };
 
 #define vcpu_gp_regs(v)		(&(v)->arch.ctxt.gp_regs)
@@ -217,6 +221,8 @@ struct kvm_vcpu_stat {
 	CYCLE_STAT(host_cycles);
 	CYCLE_STAT(vm_cycles);
 	CYCLE_STAT(g32_cycles);
+	CYCLE_STAT(gic_int_cycles);
+	CYCLE_STAT(gic_list_cycles);
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,

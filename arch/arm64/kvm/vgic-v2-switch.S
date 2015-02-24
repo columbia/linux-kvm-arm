@@ -29,6 +29,10 @@
 	.text
 	.pushsection	.hyp.text, "ax"
 
+.macro read_ccounter reg
+	mrs \reg, PMCCNTR_EL0
+.endm
+
 /*
  * Save the VGIC CPU state into memory
  * x0: Register pointing to VCPU struct
@@ -36,6 +40,7 @@
  */
 ENTRY(__save_vgic_v2_state)
 __save_vgic_v2_state:
+	
 	/* Get VGIC VCTRL base into x2 */
 	ldr	x2, [x0, #VCPU_KVM]
 	kern_hyp_va	x2
@@ -76,10 +81,12 @@ CPU_BE(	str	w8, [x3, #VGIC_V2_CPU_EISR] )
 CPU_BE(	str	w9, [x3, #(VGIC_V2_CPU_ELRSR + 4)] )
 CPU_BE(	str	w10, [x3, #VGIC_V2_CPU_ELRSR] )
 	str	w11, [x3, #VGIC_V2_CPU_APR]
-
+	
 	/* Clear GICH_HCR */
 	str	wzr, [x2, #GICH_HCR]
 
+	read_ccounter x4
+	str	x4, [x0, #GIC_LIST_SAVE_CC1]
 	/* Save list registers */
 	add	x2, x2, #GICH_LR0
 	ldr	w4, [x3, #VGIC_CPU_NR_LR]
@@ -89,6 +96,9 @@ CPU_BE(	rev	w5, w5 )
 	str	w5, [x3], #4
 	sub	w4, w4, #1
 	cbnz	w4, 1b
+	read_ccounter x4
+	str	x4, [x0, #GIC_LIST_SAVE_CC2]
+
 2:
 	ret
 ENDPROC(__save_vgic_v2_state)

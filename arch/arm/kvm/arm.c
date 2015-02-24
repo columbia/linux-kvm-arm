@@ -169,9 +169,15 @@ void dump_ws_stats(struct kvm_vcpu *vcpu)
 	kvm_err("EN/DISABLE VM MIN %llu AVG %llu MAX %llu\n" 
 		,vcpu->stat.vm_cycles_min ,vcpu->stat.vm_cycles_avg
 		,vcpu->stat.vm_cycles_max);
-	kvm_err("GUES32 S/R MIN %llu AVG %llu MAX %llu\n" 
+	kvm_err("GUEST32 S/R MIN %llu AVG %llu MAX %llu\n" 
 		,vcpu->stat.g32_cycles_min ,vcpu->stat.g32_cycles_avg
 		,vcpu->stat.g32_cycles_max);
+	kvm_err("GIC INTERESTING SAVE MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.gic_int_cycles_min ,vcpu->stat.gic_int_cycles_avg
+		,vcpu->stat.gic_int_cycles_max);
+	kvm_err("GIC LIST SAVE MIN %llu AVG %llu MAX %llu\n" 
+		,vcpu->stat.gic_list_cycles_min ,vcpu->stat.gic_list_cycles_avg
+		,vcpu->stat.gic_list_cycles_max);
 #elif CONFIG_ARM
 	kvm_err("WS MIN %lu AVG %lu MAX %lu\n" 
 		,vcpu->stat.ws_cycles_min ,vcpu->stat.ws_cycles_avg
@@ -215,6 +221,10 @@ void reset_ws_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.g32_cycles_max = 0;
 	vcpu->stat.timer_cycles_min = 0;
 	vcpu->stat.timer_cycles_max = 0;
+	vcpu->stat.gic_int_cycles_min = 0;
+	vcpu->stat.gic_int_cycles_max = 0;
+	vcpu->stat.gic_list_cycles_min = 0;
+	vcpu->stat.gic_list_cycles_max = 0;
 #elif CONFIG_ARM
 	vcpu->stat.cp15_cycles_min = 0;
 	vcpu->stat.cp15_cycles_max = 0;
@@ -225,6 +235,7 @@ static void calc_ws_stats(struct kvm_vcpu *vcpu)
 {
 	static int init = 0;
 	ccount_t ws_cycles, vm_cycles;
+	ccount_t gic_int_cycles, gic_list_cycles;
 	//ccount_t vm_act_cycles, vm_dact_cycles, vm_cycles;
 
 	if (!init) {
@@ -240,7 +251,6 @@ static void calc_ws_stats(struct kvm_vcpu *vcpu)
 	 /* next line is a hack! */
 	 /*__calc_avg(vcpu, &vcpu->stat.ws_cycles_avg, 0, ws_cycles,
 			&vcpu->stat.ws_cycles_dp, &vcpu->stat.ws_cycles);*/
-
 	calc_avg_pair(vgic);
 	calc_avg_pair(vcpu);
 	
@@ -259,6 +269,21 @@ static void calc_ws_stats(struct kvm_vcpu *vcpu)
 	__calc_avg(vcpu, &vcpu->stat.vm_cycles_avg, vm_cycles,
 			&vcpu->stat.vm_cycles_dp, &vcpu->stat.vm_cycles_min,
 			&vcpu->stat.vm_cycles_max);
+	
+	gic_int_cycles = vcpu->arch.gic_int_save_cc2 - vcpu->arch.gic_int_save_cc1;
+	__calc_avg(vcpu, &vcpu->stat.gic_int_cycles_avg, gic_int_cycles,
+			&vcpu->stat.gic_int_cycles_dp, &vcpu->stat.gic_int_cycles_min,
+			&vcpu->stat.gic_int_cycles_max);
+
+	gic_list_cycles = vcpu->arch.gic_list_save_cc2 - vcpu->arch.gic_list_save_cc1;
+	__calc_avg(vcpu, &vcpu->stat.gic_list_cycles_avg, gic_list_cycles,
+			&vcpu->stat.gic_list_cycles_dp, &vcpu->stat.gic_list_cycles_min,
+			&vcpu->stat.gic_list_cycles_max);
+	/*kvm_err("vgic save %llu restore %llu list %llu inter %llu\n", 
+		vcpu->arch.vgic_save_cc2 - vcpu->arch.vgic_save_cc1,
+		vcpu->arch.vgic_rest_cc2 - vcpu->arch.vgic_rest_cc1,
+		gic_list_cycles, gic_int_cycles);*/
+
 #elif CONFIG_ARM
 	calc_avg_pair(cp15);
 

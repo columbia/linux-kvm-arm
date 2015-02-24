@@ -192,7 +192,10 @@ int main(void)
   DEFINE(VCPU_G32_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.g32_save_cc2));
   DEFINE(VCPU_G32_REST_CC1,	offsetof(struct kvm_vcpu, arch.g32_rest_cc1));
   DEFINE(VCPU_G32_REST_CC2,	offsetof(struct kvm_vcpu, arch.g32_rest_cc2));
-
+  DEFINE(GIC_INT_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.gic_int_save_cc1));
+  DEFINE(GIC_INT_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.gic_int_save_cc2));
+  DEFINE(GIC_LIST_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.gic_list_save_cc1));
+  DEFINE(GIC_LIST_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.gic_list_save_cc2));
 #endif
 #ifdef CONFIG_ARM64_CPU_SUSPEND
   DEFINE(CPU_SUSPEND_SZ,	sizeof(struct cpu_suspend_ctx));
