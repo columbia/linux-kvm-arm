@@ -213,6 +213,15 @@ int main(void)
   DEFINE(VCPU_CP15_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.cp15_save_cc2));
   DEFINE(VCPU_CP15_REST_CC1,	offsetof(struct kvm_vcpu, arch.cp15_rest_cc1));
   DEFINE(VCPU_CP15_REST_CC2,	offsetof(struct kvm_vcpu, arch.cp15_rest_cc2));
+  DEFINE(GIC_INT_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.gic_int_save_cc1));
+  DEFINE(GIC_INT_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.gic_int_save_cc2));
+  DEFINE(GIC_LIST_SAVE_CC1,	offsetof(struct kvm_vcpu, arch.gic_list_save_cc1));
+  DEFINE(GIC_LIST_SAVE_CC2,	offsetof(struct kvm_vcpu, arch.gic_list_save_cc2));
+  DEFINE(VCPU_TIMER_SAVE_CC1, 	offsetof(struct kvm_vcpu, arch.timer_save_cc1));
+  DEFINE(VCPU_TIMER_SAVE_CC2, 	offsetof(struct kvm_vcpu, arch.timer_save_cc2));
+  DEFINE(VCPU_TIMER_REST_CC1, 	offsetof(struct kvm_vcpu, arch.timer_rest_cc1));
+  DEFINE(VCPU_TIMER_REST_CC2, 	offsetof(struct kvm_vcpu, arch.timer_rest_cc2));
+
 #ifdef CONFIG_KVM_ARM_VGIC
   DEFINE(VCPU_VGIC_CPU,		offsetof(struct kvm_vcpu, arch.vgic_cpu));
   DEFINE(VGIC_V2_CPU_HCR,	offsetof(struct vgic_cpu, vgic_v2.vgic_hcr));

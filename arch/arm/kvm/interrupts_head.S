@@ -468,6 +468,8 @@ ARM_BE8(rev	r10, r10	)
 	str	r5, [r2, #GICH_HCR]
 
 	/* Save list registers */
+	read_ccounter r4
+	str	r4, [vcpu, #GIC_LIST_SAVE_CC1]
 	add	r2, r2, #GICH_LR0
 	add	r3, r11, #VGIC_V2_CPU_LR
 	ldr	r4, [r11, #VGIC_CPU_NR_LR]
@@ -476,6 +478,8 @@ ARM_BE8(rev	r6, r6	)
 	str	r6, [r3], #4
 	subs	r4, r4, #1
 	bne	1b
+	read_ccounter r4
+	str	r4, [vcpu, #GIC_LIST_SAVE_CC2]
 2:
 #endif
 .endm

@@ -164,6 +164,15 @@ struct kvm_vcpu_arch {
 	ccount_t cp15_save_cc2;
 	ccount_t cp15_rest_cc1;
 	ccount_t cp15_rest_cc2;
+	/* GIC */
+	ccount_t gic_int_save_cc1;
+	ccount_t gic_int_save_cc2;
+	ccount_t gic_list_save_cc1;
+	ccount_t gic_list_save_cc2;
+	ccount_t timer_rest_cc1;
+	ccount_t timer_rest_cc2;
+	ccount_t timer_save_cc1;
+	ccount_t timer_save_cc2;
 };
 
 struct kvm_vm_stat {
@@ -181,6 +190,10 @@ struct kvm_vcpu_stat {
 	CYCLE_STAT(abt_cycles);
 	CYCLE_STAT(vm_cycles);
 	CYCLE_STAT(cp15_cycles);
+	CYCLE_STAT(gic_int_cycles);
+	CYCLE_STAT(gic_list_cycles);
+	CYCLE_STAT(timer_cycles);
+
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,

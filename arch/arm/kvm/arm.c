@@ -194,6 +194,12 @@ void dump_ws_stats(struct kvm_vcpu *vcpu)
 	kvm_err("CP15 S/R MIN %lu AVG %lu MAX %lu\n" 
 		,vcpu->stat.cp15_cycles_min ,vcpu->stat.cp15_cycles_avg
 		,vcpu->stat.cp15_cycles_max);
+	kvm_err("TIMER MIN %lu AVG %lu MAX %lu\n" 
+		,vcpu->stat.timer_cycles_min ,vcpu->stat.timer_cycles_avg
+		,vcpu->stat.timer_cycles_max);
+	kvm_err("GIC LIST SAVE MIN %lu AVG %lu MAX %lu\n" 
+		,vcpu->stat.gic_list_cycles_min ,vcpu->stat.gic_list_cycles_avg
+		,vcpu->stat.gic_list_cycles_max);
 
 #endif
 	kvm_err("\n----- ------------------ -----\n");
@@ -209,7 +215,10 @@ void reset_ws_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.vcpu_cycles_max = 0;
 	vcpu->stat.vm_cycles_min = 0;
 	vcpu->stat.vm_cycles_max = 0;
-
+	vcpu->stat.timer_cycles_min = 0;
+	vcpu->stat.timer_cycles_max = 0;
+	vcpu->stat.gic_list_cycles_min = 0;
+	vcpu->stat.gic_list_cycles_max = 0;
 #ifdef CONFIG_ARM64
 	vcpu->stat.fpsimd_cycles_min = 0;
 	vcpu->stat.fpsimd_cycles_max = 0;
@@ -219,12 +228,8 @@ void reset_ws_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.debug_cycles_max = 0;
 	vcpu->stat.g32_cycles_min = 0;
 	vcpu->stat.g32_cycles_max = 0;
-	vcpu->stat.timer_cycles_min = 0;
-	vcpu->stat.timer_cycles_max = 0;
 	vcpu->stat.gic_int_cycles_min = 0;
 	vcpu->stat.gic_int_cycles_max = 0;
-	vcpu->stat.gic_list_cycles_min = 0;
-	vcpu->stat.gic_list_cycles_max = 0;
 #elif CONFIG_ARM
 	vcpu->stat.cp15_cycles_min = 0;
 	vcpu->stat.cp15_cycles_max = 0;
@@ -253,13 +258,12 @@ static void calc_ws_stats(struct kvm_vcpu *vcpu)
 			&vcpu->stat.ws_cycles_dp, &vcpu->stat.ws_cycles);*/
 	calc_avg_pair(vgic);
 	calc_avg_pair(vcpu);
-	
+	calc_avg_pair(timer);
 #ifdef CONFIG_ARM64
 	calc_avg_pair(fpsimd);
 	calc_avg_pair(sysregs);
 	calc_avg_pair(debug);
 	calc_avg_pair(g32);
-	calc_avg_pair(timer);
 
 	vm_cycles = (vcpu->arch.activate_vm_cc2 - vcpu->arch.activate_vm_cc1) +
 			(vcpu->arch.deactivate_vm_cc2 - vcpu->arch.deactivate_vm_cc1); 
@@ -292,6 +296,12 @@ static void calc_ws_stats(struct kvm_vcpu *vcpu)
 	__calc_avg(vcpu, &vcpu->stat.vm_cycles_avg, vm_cycles,
 			&vcpu->stat.vm_cycles_dp, &vcpu->stat.vm_cycles_min,
 			&vcpu->stat.vm_cycles_max);
+
+	gic_list_cycles = vcpu->arch.gic_list_save_cc2 - vcpu->arch.gic_list_save_cc1;
+	__calc_avg(vcpu, &vcpu->stat.gic_list_cycles_avg, gic_list_cycles,
+			&vcpu->stat.gic_list_cycles_dp, &vcpu->stat.gic_list_cycles_min,
+			&vcpu->stat.gic_list_cycles_max);
+
 #endif
 }
 

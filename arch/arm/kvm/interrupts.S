@@ -101,9 +101,14 @@ ENTRY(__kvm_vcpu_run)
 	read_ccounter r1
 	str	r1, [vcpu, #VCPU_VGIC_REST_CC1]
 	restore_vgic_state
-	restore_timer_state
 	read_ccounter r1
 	str	r1, [vcpu, #VCPU_VGIC_REST_CC2]
+
+	read_ccounter r1
+	str 	r1, [vcpu, #VCPU_TIMER_REST_CC1]
+	restore_timer_state
+	read_ccounter r1		
+	str 	r1, [vcpu, #VCPU_TIMER_REST_CC2]
 
 	read_ccounter r2
 	str	r2, [vcpu, #VCPU_CP15_REST_CC1]
@@ -217,8 +222,13 @@ after_vfp_restore:
 	str	r2, [vcpu, #VCPU_CP15_SAVE_CC2]
 
 	read_ccounter r2
-	str	r2, [vcpu, #VCPU_VGIC_SAVE_CC1]
+	str	r2, [vcpu, #VCPU_TIMER_SAVE_CC1]
 	save_timer_state
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_TIMER_SAVE_CC2]
+
+	read_ccounter r2
+	str	r2, [vcpu, #VCPU_VGIC_SAVE_CC1]
 	save_vgic_state
 	read_ccounter r2
 	str	r2, [vcpu, #VCPU_VGIC_SAVE_CC2]
