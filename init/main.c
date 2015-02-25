@@ -78,6 +78,7 @@
 #include <linux/context_tracking.h>
 #include <linux/random.h>
 #include <linux/list.h>
+#include <linux/virt_test.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -676,6 +677,7 @@ asmlinkage __visible void __init start_kernel(void)
 
 	ftrace_init();
 
+	init_virt_test();	
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();
 }
