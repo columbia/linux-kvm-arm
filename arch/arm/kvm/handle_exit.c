@@ -43,6 +43,19 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	trace_kvm_hvc(*vcpu_pc(vcpu), *vcpu_reg(vcpu, 0),
 		      kvm_vcpu_hvc_get_imm(vcpu));
 
+	/*
+	 * Enable cycle counter for Xen - we choose to be compatible but rely
+	 * on running measurement guests under perf on the KVM host.
+	 */
+	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+		return 1;
+	}
+
+	/* NOOP hvc call to measure hypercall turn-around time */
+	if (*vcpu_reg(vcpu, 0) == 0x4b000000) {
+		return 1;
+	}
+
 	ret = kvm_psci_call(vcpu);
 	if (ret < 0) {
 		kvm_inject_undefined(vcpu);
