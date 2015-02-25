@@ -28,6 +28,20 @@
 
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
 
+#ifdef CONFIG_KVM_ARM_WS_PROFILE
+static void print_kvm_vcpu_stats(struct kvm_vcpu *vcpu)
+{
+	trace_printk("vgic_list_reg_save_cc: %lu\n",
+		     vcpu->stat.vgic_list_reg_save_cc);
+	trace_printk("vgic_list_reg_restore_cc: %lu\n",
+		     vcpu->stat.vgic_list_reg_restore_cc);
+	trace_printk("vgic_hcr_int_save_cc: %lu\n",
+		     vcpu->stat.vgic_hcr_int_save_cc);
+	trace_printk("vgic_hcr_int_restore_cc: %lu\n",
+		     vcpu->stat.vgic_hcr_int_restore_cc);
+}
+#endif
+
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
@@ -45,8 +59,19 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		return 1;
 	}
 
+#ifdef CONFIG_KVM_ARM_WS_PROFILE
+	/* Special HVC call values to measure world-switch time */
+	if (*vcpu_reg(vcpu, 0) == 0x10000 ||
+	    *vcpu_reg(vcpu, 0) == 0x11000) {
+		print_kvm_vcpu_stats(vcpu);
+		return 1;
+	}
+#endif
+
 	ret = kvm_psci_call(vcpu);
 	if (ret < 0) {
+		kvm_err("injecting undefined exception on hvc call with reg0: 0x%lx\n",
+			*vcpu_reg(vcpu, 0));
 		kvm_inject_undefined(vcpu);
 		return 1;
 	}

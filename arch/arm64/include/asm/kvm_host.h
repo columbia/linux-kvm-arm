@@ -163,6 +163,10 @@ struct kvm_vm_stat {
 
 struct kvm_vcpu_stat {
 	u32 halt_wakeup;
+	unsigned long vgic_list_reg_save_cc;
+	unsigned long vgic_list_reg_restore_cc;
+	unsigned long vgic_hcr_int_save_cc;
+	unsigned long vgic_hcr_int_restore_cc;
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,

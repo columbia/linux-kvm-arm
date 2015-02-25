@@ -68,4 +68,11 @@ config KVM_ARM_TIMER
 	---help---
 	  Adds support for the Architected Timers in virtual machines
 
+config KVM_ARM_WS_PROFILE
+	bool "Enable KVM world-switch profiling code (EXPERIMENTAL)"
+	depends on KVM_ARM_HOST
+	---help---
+	  Profile individual bits of the world-switch path, may be
+	  hacky, you've been warned!
+
 endif # VIRTUALIZATION

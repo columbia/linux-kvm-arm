@@ -811,11 +811,27 @@
 	ldr	x24, [x24, VGIC_SAVE_FN]
 	kern_hyp_va	x24
 	blr	x24
+
+#ifdef CONFIG_KVM_ARM_WS_PROFILE
+	isb
+	read_ccounter	x2
+	isb
+#endif
+
 	mrs	x24, hcr_el2
 	mov	x25, #HCR_INT_OVERRIDE
 	neg	x25, x25
 	and	x24, x24, x25
 	msr	hcr_el2, x24
+
+#ifdef CONFIG_KVM_ARM_WS_PROFILE
+	isb
+	read_ccounter	x3
+	isb
+	sub	x2, x3, x2
+	str	x2, [x0, #KVM_STAT_VGIC_INT_SAVE]
+#endif
+
 .endm
 
 /*
