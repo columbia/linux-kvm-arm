@@ -136,6 +136,12 @@ extern char __restore_vgic_v2_state[];
 extern char __save_vgic_v3_state[];
 extern char __restore_vgic_v3_state[];
 
+#else
+
+.macro read_ccounter reg
+	mrs \reg, PMCCNTR_EL0
+.endm
+
 #endif
 
 #endif /* __ARM_KVM_ASM_H__ */

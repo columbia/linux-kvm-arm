@@ -242,4 +242,12 @@ static inline void kvm_arch_sync_events(struct kvm *kvm) {}
 static inline void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu) {}
 static inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
 
+static inline unsigned long kvm_arm_read_cc(void)
+{
+	unsigned long cc;
+
+	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+	return cc;
+}
+
 #endif /* __ARM_KVM_HOST_H__ */
