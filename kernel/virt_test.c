@@ -42,9 +42,9 @@ static noinline void __noop(void)
 {
 }
 
-static volatile ccount_t read_cc(void)
+static volatile unsigned long read_cc(void)
 {
-	ccount_t cc;
+	unsigned long cc;
 	isb();
 #ifdef CONFIG_ARM64
 	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
@@ -79,9 +79,9 @@ void send_and_wait_ipi(void)
 	return;
 }
 
-static ccount_t ipi_test(void)
+static unsigned long ipi_test(void)
 {
-	ccount_t ret, cc_before, cc_after;
+	unsigned long ret, cc_before, cc_after;
 	unsigned long flags;
 
 	local_irq_save(flags);
@@ -95,9 +95,9 @@ static ccount_t ipi_test(void)
 
 }
 
-static ccount_t hvc_test(void)
+static unsigned long hvc_test(void)
 {
-	ccount_t ret, cc_before, cc_after;
+	unsigned long ret, cc_before, cc_after;
 	unsigned long flags;
 
 	local_irq_save(flags);
@@ -110,9 +110,9 @@ static ccount_t hvc_test(void)
 	return ret;
 }
 
-static ccount_t noop_test(void)
+static unsigned long noop_test(void)
 {
-	ccount_t ret, cc_before, cc_after;
+	unsigned long ret, cc_before, cc_after;
 	unsigned long flags;
 
 	local_irq_save(flags);
@@ -125,9 +125,9 @@ static ccount_t noop_test(void)
 	return ret;
 }
 
-static ccount_t mmio_user(void)
+static unsigned long mmio_user(void)
 {
-	ccount_t ret, cc_before, cc_after;
+	unsigned long ret, cc_before, cc_after;
 	u32 val;
 
 	cc_before = read_cc();
@@ -138,9 +138,9 @@ static ccount_t mmio_user(void)
 }
 
 
-static ccount_t mmio_kernel(void)
+static unsigned long mmio_kernel(void)
 {
-	ccount_t ret, cc_before, cc_after;
+	unsigned long ret, cc_before, cc_after;
 	u32 val;
 	unsigned long flags;
 
@@ -154,9 +154,9 @@ static ccount_t mmio_kernel(void)
 	return ret;
 }
 
-static ccount_t eoi_test(void)
+static unsigned long eoi_test(void)
 {
-	ccount_t ret, cc_before, cc_after;
+	unsigned long ret, cc_before, cc_after;
 	u32 val;
 
 	unsigned long flags;
@@ -171,15 +171,15 @@ static ccount_t eoi_test(void)
 	return ret;
 }
 
-static ccount_t trap_out_test(void)
+static unsigned long trap_out_test(void)
 {
 	unsigned long flags;
-	ccount_t trap_out = 0;
-	ccount_t before_hvc= 0, soh = 0, after_hvc = 0;
+	unsigned long trap_out = 0;
+	unsigned long before_hvc= 0, soh = 0, after_hvc = 0;
 #ifndef CONFIG_ARM64
-	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
+	unsigned long cc0 = 0, cc1 = 0, cc2 = 0;
 #endif
-	ccount_t eoh = 0; /* end of hyp */
+	unsigned long eoh = 0; /* end of hyp */
 
 	before_hvc = 0, soh = 0, after_hvc = 0;
 	local_irq_save(flags);
@@ -219,11 +219,11 @@ static ccount_t trap_out_test(void)
 }
 
 
-static ccount_t trap_in_test(void)
+static unsigned long trap_in_test(void)
 {
 	unsigned long flags;
-	ccount_t trap_in = 0;
-	ccount_t cc0 = 0, cc1 = 0, cc2 = 0;
+	unsigned long trap_in = 0;
+	unsigned long cc0 = 0, cc1 = 0, cc2 = 0;
 
 	cc0 = 0, cc1 = 0, cc2 = 0;
 
@@ -301,8 +301,8 @@ out:
 static void loop_test(struct virt_test *test)
 {
 	unsigned long i, iterations = 32;
-	ccount_t sample, cycles;
-	ccount_t min = 0, max = 0;
+	unsigned long sample, cycles;
+	unsigned long min = 0, max = 0, avg = 0;
 
 	do {
 		iterations *= 2;
@@ -333,14 +333,14 @@ static void loop_test(struct virt_test *test)
 
 	//debug("%s exit %d cycles over %d iterations = %d\n",
 	//       test->name, cycles, iterations, cycles / iterations);
+	avg = cycles / iterations;
 	printk("columbia %s\t%lu\t%lu, min: %lu, max: %lu\n",
-	       test->name, (unsigned long)(cycles / iterations), iterations,
-	       (unsigned long) min, (unsigned long) max);
+	       test->name, avg, iterations, min, max);
 }
 
 static void run_test_once(struct virt_test *test)
 {
-	ccount_t sample;
+	unsigned long sample;
 	sample = test->test_fn();
 	printk("columbia once %s\t%lu\n", test->name, (unsigned long)sample);
 }
