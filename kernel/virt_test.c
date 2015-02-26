@@ -363,7 +363,7 @@ static void loop_test(struct virt_test *test)
 	//debug("%s exit %d cycles over %d iterations = %d\n",
 	//       test->name, cycles, iterations, cycles / iterations);
 	avg = cycles / iterations;
-	printk("columbia %s\t%lu\t%lu, min: %lu, max: %lu\n",
+	trace_printk("virt-test %s\t%lu\t%lu, min: %lu, max: %lu\n",
 	       test->name, avg, iterations, min, max);
 }
 
@@ -371,7 +371,7 @@ static void run_test_once(struct virt_test *test)
 {
 	unsigned long sample;
 	sample = test->test_fn();
-	printk("columbia once %s\t%lu\n", test->name, (unsigned long)sample);
+	trace_printk("virt-test once %s\t%lu\n", test->name, sample);
 }
 
 static int arm_virt_unit_test(unsigned long op)
@@ -383,12 +383,9 @@ static int arm_virt_unit_test(unsigned long op)
 
 	test = &available_tests[op];
 
-	printk("virt-test %s start----------------------\n", test->name);
-
 	loop_test(test);
 	run_test_once(test);
 
-	printk("virt-test %s endit----------------------\n", test->name);
 	return 0;
 }
 
