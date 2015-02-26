@@ -377,14 +377,22 @@ static void run_test_once(struct virt_test *test)
 static int arm_virt_unit_test(unsigned long op)
 {
 	struct virt_test *test;
+	int i;
 
 	if (op >= ARRAY_SIZE(available_tests))
 		return -EINVAL;
 
-	test = &available_tests[op];
-
-	loop_test(test);
-	run_test_once(test);
+	if (op > 0) {
+		test = &available_tests[op - 1];
+		loop_test(test);
+		run_test_once(test);
+	} else {
+		for_each_test(test, available_tests, i) {
+			test = &available_tests[i];
+			loop_test(test);
+			run_test_once(test);
+		}
+	}
 
 	return 0;
 }
@@ -417,7 +425,8 @@ static int virt_test_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "Test Idx    Test Name\n");
 	seq_printf(m, "---------------------\n");
 	for_each_test(test, available_tests, i) {
-	seq_printf(m, "     %3d    %s\n", i, test->name);
+		seq_printf(m, "       0    All tests\n");
+		seq_printf(m, "     %3d    %s\n", i + 1, test->name);
 	}
 
 	return 0;
