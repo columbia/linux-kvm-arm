@@ -25,8 +25,8 @@
  *    access is strongly recommended for meaningful results.
  *
  *  - The host provisions a NOOP hypercall.  Current method relies on placing
- *    a predefined value in r0/x0 when doing an HVC call.  See the definition
- *    of HVC_NOOP below.
+ *    a predefined value in r0/x0 when doing an HVC call.  See the HVC_
+ *    defines below.
  */
 #include <linux/syscalls.h>
 #include <linux/unistd.h>
@@ -38,6 +38,7 @@
 #include <asm/io.h>
 
 #define HVC_NOOP	0x4b000000
+#define HVC_CCNT_ENABLE	0x4b000001
 
 static void *mmio_read_user_addr;
 static void *vgic_dist_addr;
@@ -463,6 +464,9 @@ static const struct file_operations virttest_proc_fops = {
 
 static int __init virt_test_init(void)
 {
+	/* Initialize and enable the cycle counter on Xen systems */
+	kvm_call_hyp((void*)HVC_CCNT_ENABLE);
+
 	proc_create("virttest", 0, NULL, &virttest_proc_fops);
 	return 0;
 }
