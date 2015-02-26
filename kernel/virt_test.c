@@ -374,7 +374,7 @@ static ssize_t virttest_write(struct file *file, const char __user *buffer,
 		size_t count, loff_t *pos)
 {
 	unsigned long procfs_buffer_size;
-	char procfs_buffer[PROCFS_MAX_SIZE];
+	char procfs_buffer[PROCFS_MAX_SIZE] = {0};
 
 	/* get buffer size */
 	procfs_buffer_size = count;
