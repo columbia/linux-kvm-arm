@@ -350,7 +350,7 @@ static u32 arm_virt_unit_test(int op)
 	struct virt_test *test;
 	unsigned long ret, i;
 	/* unsigned int run_once = 0; */
-	if (op < 0 || op > 10) {
+	if (op <= 0 || op >= 10) {
 		kvm_err("invalid op range\n");
 		ret = -EINVAL;
 		goto out;
