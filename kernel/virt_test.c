@@ -26,12 +26,12 @@ __asm__(".arch_extension	virt");
 #define GOAL (1ULL << 28)
 #define ARR_SIZE(_x) ((int)(sizeof(_x) / sizeof(_x[0])))
 #define for_each_test(_iter, _tests, _tmp) \
-        for (_tmp = 0, _iter = _tests; \
-             _tmp < ARR_SIZE(_tests); \
-             _tmp++, _iter++)
+	for (_tmp = 0, _iter = _tests; \
+	     _tmp < ARR_SIZE(_tests); \
+	     _tmp++, _iter++)
 
 #define CYCLE_COUNT(c1, c2) \
-        (((c1) > (c2) || ((c1) == (c2) && count_cycles)) ? 0 : (c2) - (c1))
+	(((c1) > (c2) || ((c1) == (c2) && count_cycles)) ? 0 : (c2) - (c1))
 
 #define PROCFS_MAX_SIZE 128
 #define MAX_MSG_LEN 512
@@ -44,15 +44,15 @@ static noinline void __noop(void)
 
 static volatile ccount_t read_cc(void)
 {
-        ccount_t cc;
+	ccount_t cc;
 	isb();
 #ifdef CONFIG_ARM64
 	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
 #else
-        asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
 #endif
 	isb();
-        return cc;
+	return cc;
 }
 
 #define GICC_EOIR		0x00000010
@@ -72,7 +72,7 @@ void send_and_wait_ipi(void)
 		}
 	}
 	while (!cpu1_ipi_ack && timeout--);
-	
+
 	if (!cpu1_ipi_ack)
 		pr_warn("ipi received failed\n");
 
@@ -146,7 +146,7 @@ static ccount_t mmio_kernel(void)
 
 	local_irq_save(flags);
 	cc_before = read_cc();
-	val = readl(vgic_dist_addr + 0x8); //Distributor Implementer Identification Register
+	val = readl(vgic_dist_addr + 0x8); /* GICD_IIDR */
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -173,7 +173,6 @@ static ccount_t eoi_test(void)
 
 static ccount_t trap_out_test(void)
 {
-	
 	unsigned long flags;
 	ccount_t trap_out = 0;
 	ccount_t before_hvc= 0, soh = 0, after_hvc = 0;
@@ -335,7 +334,8 @@ static void loop_test(struct virt_test *test)
 	//debug("%s exit %d cycles over %d iterations = %d\n",
 	//       test->name, cycles, iterations, cycles / iterations);
 	printk("columbia %s\t%lu\t%lu, min: %lu, max: %lu\n",
-	       test->name, (unsigned long)(cycles / iterations), iterations, (unsigned long) min, (unsigned long) max);
+	       test->name, (unsigned long)(cycles / iterations), iterations,
+	       (unsigned long) min, (unsigned long) max);
 }
 
 static void run_test_once(struct virt_test *test)
@@ -365,7 +365,7 @@ static u32 arm_virt_unit_test(int op)
 	for_each_test(test, available_tests, i) {
 		/* Reset count for each test */
 		kvm_call_hyp((void*)0x4b000001);
-	
+
 		/* test gets run when op-2=index or task->run = true */
 		if (op == 1 && !test->run)
 			continue;
@@ -392,7 +392,7 @@ static ssize_t virttest_write(struct file *file, const char __user *buffer,
 	if (procfs_buffer_size > PROCFS_MAX_SIZE ) {
 		procfs_buffer_size = PROCFS_MAX_SIZE;
 	}
-	
+
 	/* write data to the buffer */
 	if ( copy_from_user(procfs_buffer, buffer, procfs_buffer_size) ) {
 		return -EFAULT;
@@ -415,7 +415,7 @@ static ssize_t virttest_write(struct file *file, const char __user *buffer,
 	return ret;
 }
 
-static const char virttest_msg[MAX_MSG_LEN] = 
+static const char virttest_msg[MAX_MSG_LEN] =
 	"Usage: echo [num] > /proc/virttest\n \
 	num = 1: test all\n \
 	num = 2: hvc_test\n";
