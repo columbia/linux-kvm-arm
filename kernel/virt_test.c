@@ -293,14 +293,14 @@ static unsigned long trap_in_test(void)
 }
 
 struct virt_test available_tests[] = {
-	{ "hvc",		hvc_test,	true},
-	{ "mmio_read_user",	mmio_user,	false},
-	{ "mmio_read_vgic",	mmio_kernel,	true},
-	{ "eoi",		eoi_test,	true},
-	{ "noop_guest",		noop_test,	true},
-	{ "ipi",		ipi_test,	true},
-	{ "trap-in",		trap_in_test,	false},
-	{ "trap-out",		trap_out_test,	false},
+	{ "hvc",		hvc_test	},
+	{ "mmio_read_user",	mmio_user	},
+	{ "mmio_read_vgic",	mmio_kernel	},
+	{ "eoi",		eoi_test	},
+	{ "noop_guest",		noop_test	},
+	{ "ipi",		ipi_test	},
+	{ "trap-in",		trap_in_test	},
+	{ "trap-out",		trap_out_test	},
 };
 
 static int init_mmio_test(void)
@@ -319,9 +319,10 @@ static int init_mmio_test(void)
 		goto out;
 	}
 
+	/* TODO: Need to be more clever here, device tree ? */
 	mmio_read_user_addr = ioremap(0x0a000000, 0x200);
 	if (!mmio_read_user_addr) {
-		pr_warn("ioremap failed\n");
+		pr_err("virt-test: ioremap failed\n");
 		ret = -EFAULT;
 	}
 out:
@@ -373,101 +374,86 @@ static void run_test_once(struct virt_test *test)
 	printk("columbia once %s\t%lu\n", test->name, (unsigned long)sample);
 }
 
-static u32 arm_virt_unit_test(int op)
+static int arm_virt_unit_test(unsigned long op)
 {
 	struct virt_test *test;
-	unsigned long ret, i;
-	/* unsigned int run_once = 0; */
-	if (op <= 0 || op >= 10) {
-		kvm_err("invalid op range\n");
-		ret = -EINVAL;
-		goto out;
-	}
 
-	i = 0;
-	printk("columbia unit-test start----------------------\n");
-	ret = init_mmio_test();
-	if (ret < 0)
-		goto out;
+	if (op >= ARRAY_SIZE(available_tests))
+		return -EINVAL;
 
-	for_each_test(test, available_tests, i) {
-		/* test gets run when op-2=index or task->run = true */
-		if (op == 1 && !test->run)
-			continue;
-		else if (op != 1 && (op - 2) != i)
-			continue;
-		loop_test(test);
-		run_test_once(test);
-	}
-out:
-	printk("columbia unit-test end----------------------\n");
-	return ret;
+	test = &available_tests[op];
+
+	printk("virt-test %s start----------------------\n", test->name);
+
+	loop_test(test);
+	run_test_once(test);
+
+	printk("virt-test %s endit----------------------\n", test->name);
+	return 0;
 }
 
 static ssize_t virttest_write(struct file *file, const char __user *buffer,
 		size_t count, loff_t *pos)
 {
-	unsigned long procfs_buffer_size;
-	int ret, op;
-	char procfs_buffer[PROCFS_MAX_SIZE] = {0};
-	char *ptr;
+	int ret;
+	unsigned long val;
 
-	/* get buffer size */
-	procfs_buffer_size = count;
-	if (procfs_buffer_size > PROCFS_MAX_SIZE ) {
-		procfs_buffer_size = PROCFS_MAX_SIZE;
-	}
-
-	/* write data to the buffer */
-	if ( copy_from_user(procfs_buffer, buffer, procfs_buffer_size) ) {
-		return -EFAULT;
-	}
-
-	ptr = procfs_buffer;
-	do {
-		if (*ptr == '\n') {
-			*ptr = '\0';
-			break;
-		}
-	} while (ptr++, ptr);
-	op = simple_strtol(procfs_buffer, NULL, 10);
-
-	ret = arm_virt_unit_test(op);
-	if (ret < 0)
+	ret = kstrtoul_from_user(buffer, count, 10, &val);
+	if (ret)
 		return ret;
 
-	ret = procfs_buffer_size;
-	return ret;
+	ret = arm_virt_unit_test(val);
+	if (ret)
+		return ret;
+
+	*pos += count;
+
+	return ret ? ret : count;
 }
 
-static const char virttest_msg[MAX_MSG_LEN] =
-	"Usage: echo [num] > /proc/virttest\n \
-	num = 1: test all\n \
-	num = 2: hvc_test\n";
-
-static ssize_t virttest_read(struct file *file, char __user *buffer,
-		size_t count, loff_t *pos)
+static int virt_test_proc_show(struct seq_file *m, void *v)
 {
-	if (*pos != 0)
-		return 0;
-	if (copy_to_user(buffer, virttest_msg, MAX_MSG_LEN))
-		return -EFAULT;
-	*pos = MAX_MSG_LEN;
-	return MAX_MSG_LEN;
+	int i;
+	struct virt_test *test;
+
+	seq_printf(m, "Usage: echo <test_idx> > /proc/virttest\n\n");
+	seq_printf(m, "Test Idx    Test Name\n");
+	seq_printf(m, "---------------------\n");
+	for_each_test(test, available_tests, i) {
+	seq_printf(m, "     %3d    %s\n", i, test->name);
+	}
+
+	return 0;
 };
+
+static int virt_test_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, virt_test_proc_show, NULL);
+}
 
 static const struct file_operations virttest_proc_fops = {
 	.owner = THIS_MODULE,
-	.read = virttest_read,
+	.open = virt_test_proc_open,
+	.read = seq_read,
 	.write = virttest_write,
 };
 
 static int __init virt_test_init(void)
 {
+	int ret;
+
 	/* Initialize and enable the cycle counter on Xen systems */
 	kvm_call_hyp((void*)HVC_CCNT_ENABLE);
 
+	/* Initialize MMIO regions we ned */
+	ret = init_mmio_test();
+	if (ret) {
+		pr_err("virt-test: Failed to initialize mmio tests: %d\n", ret);
+		return ret;
+	}
+
 	proc_create("virttest", 0, NULL, &virttest_proc_fops);
+	pr_info("virt-tests successfully initialized\n");
 	return 0;
 }
 __initcall(virt_test_init);
