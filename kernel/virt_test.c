@@ -14,8 +14,6 @@ static void *vgic_cpu_addr;
 extern void *gic_data_dist_base_ex(void);
 extern void *gic_data_cpu_base_ex(void);
 
-static bool count_cycles = true;
-
 volatile int cpu1_ipi_ack;
 
 #ifndef CONFIG_ARM64
@@ -31,7 +29,7 @@ __asm__(".arch_extension	virt");
 	     _tmp++, _iter++)
 
 #define CYCLE_COUNT(c1, c2) \
-	(((c1) > (c2) || ((c1) == (c2) && count_cycles)) ? 0 : (c2) - (c1))
+	((c1) > (c2)) ? 0 : (c2) - (c1)
 
 #define PROCFS_MAX_SIZE 128
 #define MAX_MSG_LEN 512
@@ -310,7 +308,7 @@ static void loop_test(struct virt_test *test)
 
 		for (i = 0; i < iterations; i++) {
 			sample = test->test_fn();
-			if (sample == 0 && count_cycles) {
+			if (sample == 0) {
 				/* If something went wrong or we had an
 				 * overflow, don't count that sample */
 				iterations--;
@@ -329,7 +327,7 @@ static void loop_test(struct virt_test *test)
 				max = sample;
 		}
 
-	} while (cycles < GOAL && count_cycles);
+	} while (cycles < GOAL);
 
 	//debug("%s exit %d cycles over %d iterations = %d\n",
 	//       test->name, cycles, iterations, cycles / iterations);
