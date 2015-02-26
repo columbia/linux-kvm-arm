@@ -72,7 +72,7 @@ static noinline void __noop(void)
 {
 }
 
-static volatile unsigned long read_cc(void)
+static __always_inline volatile unsigned long read_cc(void)
 {
 	unsigned long cc;
 	isb();
