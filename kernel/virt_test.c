@@ -33,7 +33,8 @@ __asm__(".arch_extension	virt");
 #define CYCLE_COUNT(c1, c2) \
         (((c1) > (c2) || ((c1) == (c2) && count_cycles)) ? 0 : (c2) - (c1))
 
-#define PROCFS_MAX_SIZE 1024
+#define PROCFS_MAX_SIZE 128
+#define MAX_MSG_LEN 512
 
 extern void smp_send_virttest(int cpu);
 
@@ -263,14 +264,14 @@ static ccount_t trap_in_test(void)
 }
 
 struct virt_test available_tests[] = {
-	{ "hvc",                hvc_test,	true},
-	{ "mmio_read_user",     mmio_user,	false},
-	{ "mmio_read_vgic",     mmio_kernel,	true},
-	{ "eoi",                eoi_test,	true},
-	{ "noop_guest",         noop_test,	true},
-	{ "ipi",                ipi_test,	true},
-	{ "trap-in",         trap_in_test,	false},
-	{ "trap-out",         trap_out_test,	false},
+	{ "hvc",		hvc_test,	true},
+	{ "mmio_read_user",	mmio_user,	false},
+	{ "mmio_read_vgic",	mmio_kernel,	true},
+	{ "eoi",		eoi_test,	true},
+	{ "noop_guest",		noop_test,	true},
+	{ "ipi",		ipi_test,	true},
+	{ "trap-in",		trap_in_test,	false},
+	{ "trap-out",		trap_out_test,	false},
 };
 
 static int init_mmio_test(void)
@@ -344,11 +345,16 @@ static void run_test_once(struct virt_test *test)
 	printk("columbia once %s\t%lu\n", test->name, (unsigned long)sample);
 }
 
-static u32 arm_virt_unit_test(void)
+static u32 arm_virt_unit_test(int op)
 {
 	struct virt_test *test;
 	unsigned long ret, i;
 	/* unsigned int run_once = 0; */
+	if (op < 0 || op > 10) {
+		kvm_err("invalid op range\n");
+		ret = -EINVAL;
+		goto out;
+	}
 
 	i = 0;
 	printk("columbia unit-test start----------------------\n");
@@ -359,9 +365,16 @@ static u32 arm_virt_unit_test(void)
 	for_each_test(test, available_tests, i) {
 		/* Reset count for each test
 		kvm_call_hyp((void*)0x4b000001); */
-
-                if (!test->run)
-                        continue;
+	
+		/* test gets run when op-2=index or task->run = true */
+		/*if (op != 1 && (op-2) != i)
+			continue;
+		if (!test->run && (op-2) != i)
+			continue;*/
+		if (op == 1 && !test->run)
+			continue;
+		else if (op != 1 && (op - 2) != i)
+			continue;
 		loop_test(test);
 		run_test_once(test);
 	}
@@ -374,7 +387,9 @@ static ssize_t virttest_write(struct file *file, const char __user *buffer,
 		size_t count, loff_t *pos)
 {
 	unsigned long procfs_buffer_size;
+	int ret, op;
 	char procfs_buffer[PROCFS_MAX_SIZE] = {0};
+	char *ptr;
 
 	/* get buffer size */
 	procfs_buffer_size = count;
@@ -387,16 +402,42 @@ static ssize_t virttest_write(struct file *file, const char __user *buffer,
 		return -EFAULT;
 	}
 
-	if (!strcmp(procfs_buffer, "1\n"))
-		arm_virt_unit_test();
-	else
-		kvm_err("ERROR: echo 1 > /proc/virttest\n");
+	ptr = procfs_buffer;
+	do {
+		if (*ptr == '\n') {
+			*ptr = '\0';
+			break;
+		}
+	} while (ptr++, ptr);
+	op = simple_strtol(procfs_buffer, NULL, 10);
 
-	return procfs_buffer_size;
+	ret = arm_virt_unit_test(op);
+	if (ret < 0)
+		return ret;
+
+	ret = procfs_buffer_size;
+	return ret;
 }
+
+static const char virttest_msg[MAX_MSG_LEN] = 
+	"Usage: echo [num] > /proc/virttest\n \
+	num = 1: test all\n \
+	num = 2: hvc_test\n";
+
+static ssize_t virttest_read(struct file *file, char __user *buffer,
+		size_t count, loff_t *pos)
+{
+	if (*pos != 0)
+		return 0;
+	if (copy_to_user(buffer, virttest_msg, MAX_MSG_LEN))
+		return -EFAULT;
+	*pos = MAX_MSG_LEN;
+	return MAX_MSG_LEN;
+};
 
 static const struct file_operations virttest_proc_fops = {
 	.owner = THIS_MODULE,
+	.read = virttest_read,
 	.write = virttest_write,
 };
 
