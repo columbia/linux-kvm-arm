@@ -1,3 +1,33 @@
+/*
+ * Measure cycles to perform various operations as an ARM(64) VM guest
+ *
+ * Copyright (C) 2015 Columbia University
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *
+ * This code is not meant for upstream but as a testig framework for measuring
+ * performance of ARM(64) hypervisors, such as KVM and Xen.
+ *
+ * Requirements:
+ *  - The host must allow direct or emulated access to the cycle counter and
+ *    set the cycle counter to count in NS-EL1 and NS-EL2.  Direct hardware
+ *    access is strongly recommended for meaningful results.
+ *
+ *  - The host provisions a NOOP hypercall.  Current method relies on placing
+ *    a predefined value in r0/x0 when doing an HVC call.  See the definition
+ *    of HVC_NOOP below.
+ */
 #include <linux/syscalls.h>
 #include <linux/unistd.h>
 #include <linux/init.h>
@@ -6,6 +36,8 @@
 #include <linux/virt_test.h>
 #include <linux/proc_fs.h>
 #include <asm/io.h>
+
+#define HVC_NOOP	0x4b000000
 
 static void *mmio_read_user_addr;
 static void *vgic_dist_addr;
@@ -100,7 +132,7 @@ static unsigned long hvc_test(void)
 
 	local_irq_save(flags);
 	cc_before = read_cc();
-	kvm_call_hyp((void*)0x4b000000);
+	kvm_call_hyp((void*)HVC_NOOP);
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -313,10 +345,8 @@ static void loop_test(struct virt_test *test)
 				 * overflow, don't count that sample */
 				iterations--;
 				i--;
-				/* sample is always 0 here. why print? */
-				/* pr_warn("cycle count overflow: %lu\n", sample); */
-				/* Remove Me  */
-				kvm_call_hyp((void*)0x4b000001);
+				pr_warn("cycle count overflow: %lu\n", sample);
+
 				continue;
 			}
 			cycles += sample;
@@ -361,9 +391,6 @@ static u32 arm_virt_unit_test(int op)
 		goto out;
 
 	for_each_test(test, available_tests, i) {
-		/* Reset count for each test */
-		kvm_call_hyp((void*)0x4b000001);
-
 		/* test gets run when op-2=index or task->run = true */
 		if (op == 1 && !test->run)
 			continue;
