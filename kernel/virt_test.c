@@ -363,14 +363,10 @@ static u32 arm_virt_unit_test(int op)
 		goto out;
 
 	for_each_test(test, available_tests, i) {
-		/* Reset count for each test
-		kvm_call_hyp((void*)0x4b000001); */
+		/* Reset count for each test */
+		kvm_call_hyp((void*)0x4b000001);
 	
 		/* test gets run when op-2=index or task->run = true */
-		/*if (op != 1 && (op-2) != i)
-			continue;
-		if (!test->run && (op-2) != i)
-			continue;*/
 		if (op == 1 && !test->run)
 			continue;
 		else if (op != 1 && (op - 2) != i)
