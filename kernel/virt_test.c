@@ -54,10 +54,9 @@ __asm__(".arch_extension	virt");
 
 
 #define GOAL (1ULL << 28)
-#define ARR_SIZE(_x) ((int)(sizeof(_x) / sizeof(_x[0])))
 #define for_each_test(_iter, _tests, _tmp) \
 	for (_tmp = 0, _iter = _tests; \
-	     _tmp < ARR_SIZE(_tests); \
+	     _tmp < ARRAY_SIZE(_tests); \
 	     _tmp++, _iter++)
 
 #define CYCLE_COUNT(c1, c2) \
@@ -462,8 +461,9 @@ static const struct file_operations virttest_proc_fops = {
 	.write = virttest_write,
 };
 
-void inline init_virt_test(void)
+static int __init virt_test_init(void)
 {
 	proc_create("virttest", 0, NULL, &virttest_proc_fops);
-	return;
+	return 0;
 }
+__initcall(virt_test_init);
