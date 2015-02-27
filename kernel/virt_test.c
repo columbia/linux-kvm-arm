@@ -424,8 +424,8 @@ static int virt_test_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "Usage: echo <test_idx> > /proc/virttest\n\n");
 	seq_printf(m, "Test Idx    Test Name\n");
 	seq_printf(m, "---------------------\n");
+	seq_printf(m, "       0    All tests\n");
 	for_each_test(test, available_tests, i) {
-		seq_printf(m, "       0    All tests\n");
 		seq_printf(m, "     %3d    %s\n", i + 1, test->name);
 	}
 
