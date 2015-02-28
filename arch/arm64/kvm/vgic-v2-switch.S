@@ -36,6 +36,7 @@
  */
 ENTRY(__save_vgic_v2_state)
 __save_vgic_v2_state:
+	ws_stat_start x18
 	/* Get VGIC VCTRL base into x2 */
 	ldr	x2, [x0, #VCPU_KVM]
 	kern_hyp_va	x2
@@ -80,6 +81,10 @@ CPU_BE(	str	w10, [x3, #VGIC_V2_CPU_ELRSR] )
 	/* Clear GICH_HCR */
 	str	wzr, [x2, #GICH_HCR]
 
+	ws_stat_end x18, x19, WSSTAT_SAVE_OFFSET(WSSTAT_VGIC_OTHER)
+
+	ws_stat_start x18
+
 	/* Save list registers */
 	add	x2, x2, #GICH_LR0
 	ldr	w4, [x3, #VGIC_CPU_NR_LR]
@@ -90,6 +95,7 @@ CPU_BE(	rev	w5, w5 )
 	sub	w4, w4, #1
 	cbnz	w4, 1b
 2:
+	ws_stat_end x18, x19, WSSTAT_SAVE_OFFSET(WSSTAT_VGIC_LIST_REG)
 	ret
 ENDPROC(__save_vgic_v2_state)
 
@@ -99,6 +105,9 @@ ENDPROC(__save_vgic_v2_state)
  */
 ENTRY(__restore_vgic_v2_state)
 __restore_vgic_v2_state:
+
+	ws_stat_start x18
+
 	/* Get VGIC VCTRL base into x2 */
 	ldr	x2, [x0, #VCPU_KVM]
 	kern_hyp_va	x2
@@ -120,6 +129,9 @@ CPU_BE(	rev	w6, w6 )
 	str	w4, [x2, #GICH_HCR]
 	str	w5, [x2, #GICH_VMCR]
 	str	w6, [x2, #GICH_APR]
+	ws_stat_end x18, x19, WSSTAT_RESTORE_OFFSET(WSSTAT_VGIC_OTHER)
+
+	ws_stat_start x18
 
 	/* Restore list registers */
 	add	x2, x2, #GICH_LR0
@@ -131,6 +143,7 @@ CPU_BE(	rev	w5, w5 )
 	sub	w4, w4, #1
 	cbnz	w4, 1b
 2:
+	ws_stat_end x18, x19, WSSTAT_RESTORE_OFFSET(WSSTAT_VGIC_LIST_REG)
 	ret
 ENDPROC(__restore_vgic_v2_state)
 

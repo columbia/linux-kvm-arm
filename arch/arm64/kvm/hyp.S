@@ -124,6 +124,7 @@
 
 	// Compute base to save registers
 	add	x3, x2, #CPU_XREG_OFFSET(4)
+	ws_stat_start x2
 	stp	x4, x5, [x3]
 	stp	x6, x7, [x3, #16]
 	stp	x8, x9, [x3, #32]
@@ -132,6 +133,10 @@
 	stp	x14, x15, [x3, #80]
 	stp	x16, x17, [x3, #96]
 	str	x18, [x3, #112]
+#ifdef CONFIG_KVM_ARM_WS_PROFILE
+	mov	x18, x2
+	sub	x2, x3, #CPU_XREG_OFFSET(4)
+#endif
 
 	pop	x6, x7			// x2, x3
 	pop	x4, x5			// x0, x1
@@ -141,12 +146,14 @@
 	stp	x6, x7, [x3, #16]
 
 	save_common_regs
+	ws_stat_end x18, x19, WSSTAT_SAVE_OFFSET(WSSTAT_GUEST_GPREGS)
 .endm
 
 .macro restore_guest_regs
 	// x0 is the vcpu address.
 	// x2 is the cpu context
 	// x3 is a tmp register
+	ws_stat_start x1
 
 	// Prepare x0-x3 for later restore
 	add	x3, x2, #CPU_XREG_OFFSET(0)
@@ -169,6 +176,7 @@
 	restore_common_regs
 
 	// Last bits of the 64bit state
+	ws_stat_end x1, x2, WSSTAT_RESTORE_OFFSET(WSSTAT_GUEST_GPREGS)
 	pop	x2, x3
 	pop	x0, x1
 
@@ -812,11 +820,7 @@
 	kern_hyp_va	x24
 	blr	x24
 
-#ifdef CONFIG_KVM_ARM_WS_PROFILE
-	isb
-	read_ccounter	x2
-	isb
-#endif
+	ws_stat_start x2
 
 	mrs	x24, hcr_el2
 	mov	x25, #HCR_INT_OVERRIDE
@@ -824,25 +828,24 @@
 	and	x24, x24, x25
 	msr	hcr_el2, x24
 
-#ifdef CONFIG_KVM_ARM_WS_PROFILE
-	isb
-	read_ccounter	x3
-	isb
-	sub	x2, x3, x2
-	str	x2, [x0, #KVM_STAT_VGIC_INT_SAVE]
-#endif
-
+	ws_stat_end x2, x3, WSSTAT_SAVE_OFFSET(WSSTAT_VGIC_HCR_INT)
 .endm
 
 /*
  * Call into the vgic backend for state restoring
  */
 .macro restore_vgic_state
+
+	ws_stat_start x2
+
 	mrs	x24, hcr_el2
 	ldr	x25, [x0, #VCPU_IRQ_LINES]
 	orr	x24, x24, #HCR_INT_OVERRIDE
 	orr	x24, x24, x25
 	msr	hcr_el2, x24
+
+	ws_stat_end x2, x3, WSSTAT_RESTORE_OFFSET(WSSTAT_VGIC_HCR_INT)
+
 	adr	x24, __vgic_sr_vectors
 	ldr	x24, [x24, #VGIC_RESTORE_FN]
 	kern_hyp_va	x24
@@ -850,6 +853,9 @@
 .endm
 
 .macro save_timer_state
+
+	ws_stat_start x18
+
 	// x0: vcpu pointer
 	ldr	x2, [x0, #VCPU_KVM]
 	kern_hyp_va x2
@@ -875,9 +881,13 @@
 
 	// Clear cntvoff for the host
 	msr	cntvoff_el2, xzr
+	ws_stat_end x18, x19, WSSTAT_SAVE_OFFSET(WSSTAT_TIMER)
 .endm
 
 .macro restore_timer_state
+
+	ws_stat_start x18
+
 	// x0: vcpu pointer
 	// Disallow physical timer access for the guest
 	// Physical counter access is allowed
@@ -901,6 +911,7 @@
 	and	x2, x2, #3
 	msr	cntv_ctl_el0, x2
 1:
+	ws_stat_end x18, x19, WSSTAT_RESTORE_OFFSET(WSSTAT_TIMER)
 .endm
 
 __save_sysregs:
@@ -946,15 +957,29 @@ ENTRY(__kvm_vcpu_run)
 	ldr	x2, [x0, #VCPU_HOST_CONTEXT]
 	kern_hyp_va x2
 
+	ws_stat_start x1
 	save_host_regs
+	ws_stat_end x1, x18, WSSTAT_SAVE_OFFSET(WSSTAT_HOST_GPREGS)
+
+	ws_stat_start x1
 	bl __save_fpsimd
+	ws_stat_end x1, x18, WSSTAT_SAVE_OFFSET(WSSTAT_HOST_FPREGS)
+
+
+
+	ws_stat_start x1
 	bl __save_sysregs
+	ws_stat_end x1, x18, WSSTAT_SAVE_OFFSET(WSSTAT_HOST_SYSREGS)
 
 	compute_debug_state 1f
+	ws_stat_start x28
 	bl	__save_debug
+	ws_stat_end x28, x29, WSSTAT_SAVE_OFFSET(WSSTAT_HOST_DEBUGREGS)
 1:
+	ws_stat_start x18
 	activate_traps
 	activate_vm
+	ws_stat_end x18, x19, WSSTAT_RESTORE_OFFSET(WSSTAT_VMCONFIG)
 
 	restore_vgic_state
 	restore_timer_state
@@ -962,11 +987,18 @@ ENTRY(__kvm_vcpu_run)
 	// Guest context
 	add	x2, x0, #VCPU_CONTEXT
 
+	ws_stat_start x28
 	bl __restore_sysregs
+	ws_stat_end x28, x29, WSSTAT_RESTORE_OFFSET(WSSTAT_GUEST_SYSREGS)
+
+	ws_stat_start x28
 	bl __restore_fpsimd
+	ws_stat_end x28, x29, WSSTAT_RESTORE_OFFSET(WSSTAT_GUEST_FPREGS)
 
 	skip_debug_state x3, 1f
+	ws_stat_start x28
 	bl	__restore_debug
+	ws_stat_end x28, x29, WSSTAT_RESTORE_OFFSET(WSSTAT_GUEST_DEBUGREGS)
 1:
 	restore_guest_32bit_state
 	restore_guest_regs
@@ -982,35 +1014,54 @@ __kvm_vcpu_return:
 	add	x2, x0, #VCPU_CONTEXT
 
 	save_guest_regs
+
+	ws_stat_start x28
 	bl __save_fpsimd
+	ws_stat_end x28, x29, WSSTAT_SAVE_OFFSET(WSSTAT_GUEST_FPREGS)
+
+	ws_stat_start x28
 	bl __save_sysregs
+	ws_stat_end x28, x29, WSSTAT_SAVE_OFFSET(WSSTAT_GUEST_SYSREGS)
 
 	skip_debug_state x3, 1f
+	ws_stat_start x28
 	bl	__save_debug
+	ws_stat_end x28, x29, WSSTAT_SAVE_OFFSET(WSSTAT_GUEST_DEBUGREGS)
 1:
 	save_guest_32bit_state
 
 	save_timer_state
 	save_vgic_state
 
+	ws_stat_start x18
 	deactivate_traps
 	deactivate_vm
+	ws_stat_end x18, x19, WSSTAT_SAVE_OFFSET(WSSTAT_VMCONFIG)
 
 	// Host context
 	ldr	x2, [x0, #VCPU_HOST_CONTEXT]
 	kern_hyp_va x2
 
+	ws_stat_start x28
 	bl __restore_sysregs
+	ws_stat_end x28, x29, WSSTAT_RESTORE_OFFSET(WSSTAT_HOST_SYSREGS)
+
+	ws_stat_start x28
 	bl __restore_fpsimd
+	ws_stat_end x28, x29, WSSTAT_RESTORE_OFFSET(WSSTAT_HOST_FPREGS)
 
 	skip_debug_state x3, 1f
 	// Clear the dirty flag for the next run, as all the state has
 	// already been saved. Note that we nuke the whole 64bit word.
 	// If we ever add more flags, we'll have to be more careful...
+	ws_stat_start x28
 	str	xzr, [x0, #VCPU_DEBUG_FLAGS]
 	bl	__restore_debug
+	ws_stat_end x28, x29, WSSTAT_RESTORE_OFFSET(WSSTAT_HOST_DEBUGREGS)
 1:
+	ws_stat_start x6
 	restore_host_regs
+	ws_stat_end x6, x7, WSSTAT_RESTORE_OFFSET(WSSTAT_HOST_GPREGS)
 
 	mov	x0, x1
 	ret

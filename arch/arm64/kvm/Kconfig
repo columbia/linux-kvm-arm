@@ -60,11 +60,29 @@ config KVM_ARM_TIMER
 	---help---
 	  Adds support for the Architected Timers in virtual machines.
 
+choice
+	prompt "World-switch profiling options"
+	default KVM_ARM_WS_PROFILE_NONE
+
+config KVM_ARM_WS_PROFILE_NONE
+	bool "No profiling code"
+	depends on KVM_ARM_HOST
+
 config KVM_ARM_WS_PROFILE
 	bool "Enable KVM world-switch profiling code (EXPERIMENTAL)"
 	depends on KVM_ARM_HOST
 	---help---
 	  Profile individual bits of the world-switch path, may be
 	  hacky, you've been warned!
+
+config KVM_ARM_WS_PROFILE_FULL
+	bool "Enable complete world-switch path measure code (EXPERIMENTAL)"
+	depends on KVM_ARM_HOST
+	---help---
+	  Profile all the cycles spent in world-switches from within the
+	  hypervisor itself.
+	  Hacky, you've been warned!
+
+endchoice
 
 endif # VIRTUALIZATION

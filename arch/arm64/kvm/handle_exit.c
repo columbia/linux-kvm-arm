@@ -29,16 +29,33 @@
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
 
 #ifdef CONFIG_KVM_ARM_WS_PROFILE
+static const char* wsstat_names[WSSTAT_NR] = {
+	[WSSTAT_VGIC_LIST_REG] = "vgic_list_regs",
+	[WSSTAT_VGIC_HCR_INT] = "vgic_hcr_int",
+	[WSSTAT_VGIC_OTHER] = "vgic_other",
+	[WSSTAT_TIMER] = "timer",
+	[WSSTAT_HOST_GPREGS] = "host_gpregs",
+	[WSSTAT_GUEST_GPREGS] = "guest_gpregs",
+	[WSSTAT_HOST_FPREGS] = "host_fpregs",
+	[WSSTAT_GUEST_FPREGS] = "guest_fpregs",
+	[WSSTAT_HOST_SYSREGS] = "host_sysregs",
+	[WSSTAT_GUEST_SYSREGS] = "guest_sysregs",
+	[WSSTAT_HOST_DEBUGREGS] = "host_debugregs",
+	[WSSTAT_GUEST_DEBUGREGS] = "guest_debugregs",
+	[WSSTAT_VMCONFIG] = "vmconfig",
+
+};
+
 static void print_kvm_vcpu_stats(struct kvm_vcpu *vcpu)
 {
-	trace_printk("vgic_list_reg_save_cc: %lu\n",
-		     vcpu->stat.vgic_list_reg_save_cc);
-	trace_printk("vgic_list_reg_restore_cc: %lu\n",
-		     vcpu->stat.vgic_list_reg_restore_cc);
-	trace_printk("vgic_hcr_int_save_cc: %lu\n",
-		     vcpu->stat.vgic_hcr_int_save_cc);
-	trace_printk("vgic_hcr_int_restore_cc: %lu\n",
-		     vcpu->stat.vgic_hcr_int_restore_cc);
+	int i;
+	
+	for (i = 0; i < WSSTAT_NR; i++) {
+		trace_printk("%s_save_cc: %lu\n",
+			     wsstat_names[i], vcpu->stat.ws_stat_save[i]);
+		trace_printk("%s_restore_cc: %lu\n",
+			     wsstat_names[i], vcpu->stat.ws_stat_restore[i]);
+	}
 }
 #endif
 
@@ -56,17 +73,11 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 	/* NOOP hvc call to measure hypercall turn-around time */
 	if (*vcpu_reg(vcpu, 0) == 0x4b000000) {
-		return 1;
-	}
-
 #ifdef CONFIG_KVM_ARM_WS_PROFILE
-	/* Special HVC call values to measure world-switch time */
-	if (*vcpu_reg(vcpu, 0) == 0x10000 ||
-	    *vcpu_reg(vcpu, 0) == 0x11000) {
 		print_kvm_vcpu_stats(vcpu);
+#endif
 		return 1;
 	}
-#endif
 
 	ret = kvm_psci_call(vcpu);
 	if (ret < 0) {

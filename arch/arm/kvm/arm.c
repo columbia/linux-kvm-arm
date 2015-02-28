@@ -466,6 +466,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
 	sigset_t sigsaved;
+#ifdef CONFIG_KVM_ARM_WS_PROFILE_FULL
+	unsigned long cc_before, cc_after;
+#endif
 
 	if (unlikely(!kvm_vcpu_initialized(vcpu)))
 		return -ENOEXEC;
@@ -523,7 +526,21 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		kvm_guest_enter();
 		vcpu->mode = IN_GUEST_MODE;
 
+#ifdef CONFIG_KVM_ARM_WS_PROFILE_FULL
+		/*
+		 * Probably most useful to only enable this with counting
+		 * cycles only in EL2:
+		 * ./perf stat -e cycles:h
+		 */
+		cc_before = kvm_arm_read_cc();
+#endif
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
+
+#ifdef CONFIG_KVM_ARM_WS_PROFILE_FULL
+		cc_after = kvm_arm_read_cc();
+		trace_printk("before/after run cycles: %lu\n",
+			     cc_after - cc_before);
+#endif
 
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		vcpu->arch.last_pcpu = smp_processor_id();

@@ -163,10 +163,10 @@ struct kvm_vm_stat {
 
 struct kvm_vcpu_stat {
 	u32 halt_wakeup;
-	unsigned long vgic_list_reg_save_cc;
-	unsigned long vgic_list_reg_restore_cc;
-	unsigned long vgic_hcr_int_save_cc;
-	unsigned long vgic_hcr_int_restore_cc;
+#ifdef CONFIG_KVM_ARM_WS_PROFILE
+	unsigned long ws_stat_save[WSSTAT_NR];
+	unsigned long ws_stat_restore[WSSTAT_NR];
+#endif
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,
@@ -258,11 +258,13 @@ static inline void kvm_arch_sync_events(struct kvm *kvm) {}
 static inline void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu) {}
 static inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
 
-static inline unsigned long kvm_arm_read_cc(void)
+static __always_inline unsigned long kvm_arm_read_cc(void)
 {
 	unsigned long cc;
 
+	isb();
 	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+	isb();
 	return cc;
 }
 

@@ -112,7 +112,58 @@
 #define KVM_ARM64_DEBUG_DIRTY_SHIFT	0
 #define KVM_ARM64_DEBUG_DIRTY		(1 << KVM_ARM64_DEBUG_DIRTY_SHIFT)
 
-#ifndef __ASSEMBLY__
+#ifdef CONFIG_KVM_ARM_WS_PROFILE
+#define WSSTAT_VGIC_LIST_REG		0
+#define WSSTAT_VGIC_HCR_INT		1
+#define WSSTAT_VGIC_OTHER		2
+#define WSSTAT_TIMER			3
+#define WSSTAT_HOST_GPREGS		4
+#define WSSTAT_GUEST_GPREGS		5
+#define WSSTAT_HOST_FPREGS		6
+#define WSSTAT_GUEST_FPREGS		7
+#define WSSTAT_HOST_SYSREGS		8
+#define WSSTAT_GUEST_SYSREGS		9
+#define WSSTAT_HOST_DEBUGREGS		10
+#define WSSTAT_GUEST_DEBUGREGS		11
+#define WSSTAT_VMCONFIG			12
+#define WSSTAT_NR			13
+#endif
+
+
+#ifdef __ASSEMBLY__
+#ifndef CONFIG_KVM_ARM_WS_PROFILE
+#define WSSTAT_SAVE_OFFSET(x) 0
+#define WSSTAT_RESTORE_OFFSET(x) 0
+
+.macro ws_stat_start reg1
+	nop
+.endm
+
+.macro ws_stat_end reg1, reg2, offset
+	nop
+.endm
+#else
+#define WSSTAT_SAVE_OFFSET(x) (KVM_WSSTAT_SAVE + (8*(x)))
+#define WSSTAT_RESTORE_OFFSET(x) (KVM_WSSTAT_RESTORE + (8*(x)))
+
+.macro ws_stat_start reg1
+	isb
+	mrs \reg1, PMCCNTR_EL0
+	isb
+.endm
+
+.macro ws_stat_end reg1, reg2, offset
+	isb
+	mrs \reg2, PMCCNTR_EL0
+	isb
+	sub	\reg1, \reg2, \reg1
+	str	\reg1, [x0, #\offset]
+.endm
+#endif
+
+
+#else
+
 struct kvm;
 struct kvm_vcpu;
 
@@ -135,12 +186,6 @@ extern char __save_vgic_v2_state[];
 extern char __restore_vgic_v2_state[];
 extern char __save_vgic_v3_state[];
 extern char __restore_vgic_v3_state[];
-
-#else
-
-.macro read_ccounter reg
-	mrs \reg, PMCCNTR_EL0
-.endm
 
 #endif
 
