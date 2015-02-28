@@ -374,7 +374,7 @@ static void run_test_once(struct virt_test *test)
 	trace_printk("virt-test once %s\t%lu\n", test->name, sample);
 }
 
-static int arm_virt_unit_test(unsigned long op)
+static int arm_virt_unit_test(unsigned long op, bool once)
 {
 	struct virt_test *test;
 	int i;
@@ -384,8 +384,10 @@ static int arm_virt_unit_test(unsigned long op)
 
 	if (op > 0) {
 		test = &available_tests[op - 1];
-		loop_test(test);
-		run_test_once(test);
+		if (once)
+			run_test_once(test);
+		else
+			loop_test(test);
 	} else {
 		for_each_test(test, available_tests, i) {
 			test = &available_tests[i];
@@ -397,8 +399,8 @@ static int arm_virt_unit_test(unsigned long op)
 	return 0;
 }
 
-static ssize_t virttest_write(struct file *file, const char __user *buffer,
-		size_t count, loff_t *pos)
+static ssize_t __virttest_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *pos, bool once)
 {
 	int ret;
 	unsigned long val;
@@ -407,13 +409,25 @@ static ssize_t virttest_write(struct file *file, const char __user *buffer,
 	if (ret)
 		return ret;
 
-	ret = arm_virt_unit_test(val);
+	ret = arm_virt_unit_test(val, once);
 	if (ret)
 		return ret;
 
 	*pos += count;
 
 	return ret ? ret : count;
+}
+
+static ssize_t virttest_write(struct file *file, const char __user *buffer,
+		size_t count, loff_t *pos)
+{
+	return __virttest_write(file, buffer, count, pos, false);
+}
+
+static ssize_t virttest_once_write(struct file *file, const char __user *buffer,
+		size_t count, loff_t *pos)
+{
+	return __virttest_write(file, buffer, count, pos, true);
 }
 
 static int virt_test_proc_show(struct seq_file *m, void *v)
@@ -444,6 +458,13 @@ static const struct file_operations virttest_proc_fops = {
 	.write = virttest_write,
 };
 
+static const struct file_operations virttest_once_proc_fops = {
+	.owner = THIS_MODULE,
+	.open = virt_test_proc_open,
+	.read = seq_read,
+	.write = virttest_once_write,
+};
+
 static int __init virt_test_init(void)
 {
 	int ret;
@@ -459,6 +480,7 @@ static int __init virt_test_init(void)
 	}
 
 	proc_create("virttest", 0, NULL, &virttest_proc_fops);
+	proc_create("virttest_one", 0, NULL, &virttest_once_proc_fops);
 	pr_info("virt-tests successfully initialized\n");
 	return 0;
 }
