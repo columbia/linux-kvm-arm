@@ -363,7 +363,7 @@ static void loop_test(struct virt_test *test)
 	//debug("%s exit %d cycles over %d iterations = %d\n",
 	//       test->name, cycles, iterations, cycles / iterations);
 	avg = cycles / iterations;
-	trace_printk("virt-test %s\t%lu\t%lu, min: %lu, max: %lu\n",
+	trace_printk("virt-test %s\t%lu\t%lu\tmin:\t%lu\tmax:\t%lu\n",
 	       test->name, avg, iterations, min, max);
 }
 
