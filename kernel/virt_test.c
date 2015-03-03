@@ -379,7 +379,7 @@ static int arm_virt_unit_test(unsigned long op, bool once)
 	struct virt_test *test;
 	int i;
 
-	if (op >= ARRAY_SIZE(available_tests))
+	if (op > ARRAY_SIZE(available_tests))
 		return -EINVAL;
 
 	if (op > 0) {
