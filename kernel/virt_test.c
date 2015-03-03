@@ -37,8 +37,11 @@
 #include <linux/proc_fs.h>
 #include <asm/io.h>
 
-#define HVC_NOOP	0x4b000000
-#define HVC_CCNT_ENABLE	0x4b000001
+#define HVC_NOOP		0x4b000000
+#define HVC_CCNT_ENABLE		0x4b000001
+#define HVC_VMSWITCH_SEND	0x4b000010
+#define HVC_VMSWITCH_RCV	0x4b000020
+#define HVC_VMSWITCH_DONE	0x4b000030
 
 static void *mmio_read_user_addr;
 static void *vgic_dist_addr;
@@ -292,6 +295,37 @@ static unsigned long trap_in_test(void)
 	return trap_in;
 }
 
+static unsigned long vmswitch_send_test(void)
+{
+	unsigned long ret, cc_before, cc_after;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = read_cc();
+	kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
+	cc_after = read_cc();
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	return ret;
+}
+
+static unsigned long vmswitch_recv_test(void)
+{
+	unsigned long ret, cc_before, cc_after;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = kvm_call_hyp((void*)HVC_VMSWITCH_RCV);
+	cc_after = read_cc();
+
+	kvm_call_hyp((void*)HVC_VMSWITCH_DONE);
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	return ret;
+}
+
 struct virt_test available_tests[] = {
 	{ "hvc",		hvc_test	},
 	{ "mmio_read_user",	mmio_user	},
@@ -301,6 +335,8 @@ struct virt_test available_tests[] = {
 	{ "ipi",		ipi_test	},
 	{ "trap-in",		trap_in_test	},
 	{ "trap-out",		trap_out_test	},
+	{ "vmswitch_send",	vmswitch_send_test	},
+	{ "vmswitch_recv",	vmswitch_recv_test	},
 };
 
 static int init_mmio_test(void)
