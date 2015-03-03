@@ -59,6 +59,17 @@ static void print_kvm_vcpu_stats(struct kvm_vcpu *vcpu)
 }
 #endif
 
+static volatile bool kvm_vmswitch_ping_sent = false;
+static DECLARE_WAIT_QUEUE_HEAD(vmswitch_queue);
+
+/* Used for counting vm switch time - hackish and racy I know */
+static unsigned long cc_before;
+
+#define HVC_NOOP		0x4b000000
+#define HVC_CCNT_ENABLE		0x4b000001
+#define HVC_VMSWITCH_SEND	0x4b000010
+#define HVC_VMSWITCH_RCV	0x4b000020
+#define HVC_VMSWITCH_DONE	0x4b000030
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
@@ -67,15 +78,47 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	 * Enable cycle counter for Xen - we choose to be compatible but rely
 	 * on running measurement guests under perf on the KVM host.
 	 */
-	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+	if (*vcpu_reg(vcpu, 0) == HVC_CCNT_ENABLE) {
 		return 1;
 	}
 
 	/* NOOP hvc call to measure hypercall turn-around time */
-	if (*vcpu_reg(vcpu, 0) == 0x4b000000) {
+	if (*vcpu_reg(vcpu, 0) == HVC_NOOP) {
 #ifdef CONFIG_KVM_ARM_WS_PROFILE
 		print_kvm_vcpu_stats(vcpu);
 #endif
+		return 1;
+	}
+
+	/* Measure VM switching time */
+	if (*vcpu_reg(vcpu, 0) == HVC_VMSWITCH_SEND) {
+		/* Report error to guest if we have no waiting receiver */
+		if (!waitqueue_active(&vmswitch_queue)) {
+			*vcpu_reg(vcpu, 0) = -EAGAIN;
+			return 1;
+		}
+
+		cc_before = *vcpu_reg(vcpu, 0);
+		kvm_vmswitch_ping_sent = true;
+		smp_mb();
+		wake_up(&vmswitch_queue);
+		wait_event_interruptible(vmswitch_queue, !kvm_vmswitch_ping_sent);
+		*vcpu_reg(vcpu, 0) = 0;
+		return 1;
+	}
+
+	/* Measure VM switching time */
+	if (*vcpu_reg(vcpu, 0) == HVC_VMSWITCH_RCV) {
+		/* Assume we have one other VM running */
+		wait_event_interruptible(vmswitch_queue, kvm_vmswitch_ping_sent);
+		kvm_vmswitch_ping_sent = false;
+		*vcpu_reg(vcpu, 0) = cc_before;
+		return 1;
+	}
+
+	if (*vcpu_reg(vcpu, 0) == HVC_VMSWITCH_DONE) {
+		/* Assume we have one other VM running */
+		wake_up_all(&vmswitch_queue);
 		return 1;
 	}
 
