@@ -98,7 +98,7 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 			return 1;
 		}
 
-		cc_before = *vcpu_reg(vcpu, 0);
+		cc_before = *vcpu_reg(vcpu, 1);
 		kvm_vmswitch_ping_sent = true;
 		smp_mb();
 		wake_up(&vmswitch_queue);
