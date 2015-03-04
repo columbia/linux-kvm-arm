@@ -302,7 +302,9 @@ static unsigned long vmswitch_send_test(void)
 
 	local_irq_save(flags);
 	cc_before = read_cc();
-	kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
+	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
+	if (ret)
+		kvm_err("Sending HVC VM switch measure error: %d\n", ret);
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
