@@ -74,11 +74,28 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
 
-	/*
-	 * Enable cycle counter for Xen - we choose to be compatible but rely
-	 * on running measurement guests under perf on the KVM host.
-	 */
+	/* Enable cycle counter on this CPU. */
 	if (*vcpu_reg(vcpu, 0) == HVC_CCNT_ENABLE) {
+		unsigned long tmp;
+		asm volatile(
+				"mrs %0, PMCR_EL0\n"
+				"orr %0, %0, #1\n"
+				"orr %0, %0, #(1 << 2)\n"
+				"bic %0, %0, #(1 << 3)\n"
+				"msr PMCR_EL0, %0\n"
+				"mov %0, #0b11111\n"
+				"msr PMSELR_EL0, %0\n"
+				"isb \n"
+				"mrs %0, PMXEVTYPER_EL0\n"
+				"orr %0, %0, #(1 << 27)\n"
+				"bic %0, %0, #(3 << 30)\n"
+				"bic %0, %0, #(3 << 28)\n"
+				"msr PMXEVTYPER_EL0, %0\n"
+				"mrs %0, PMCNTENSET_EL0\n"
+				"orr %0, %0, #(1 << 31)\n"
+				"msr PMCNTENSET_EL0, %0\n"
+				: "=r" (tmp));
+		isb();
 		return 1;
 	}
 
