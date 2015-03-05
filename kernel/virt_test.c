@@ -78,13 +78,13 @@ static noinline void __noop(void)
 static __always_inline volatile unsigned long read_cc(void)
 {
 	unsigned long cc;
-	isb();
 #ifdef CONFIG_ARM64
+	isb();
 	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+	isb();
 #else
 	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
 #endif
-	isb();
 	return cc;
 }
 
@@ -219,9 +219,13 @@ static unsigned long trap_out_test(void)
 #ifdef CONFIG_ARM64
 	asm volatile(
 			"mov x0, #0x10000\n\t"
+			"isb\n\t"
 			"mrs x3 , PMCCNTR_EL0\n\t"
+			"isb\n\t"
 			"hvc #0\n\t"
+			"isb\n\t"
 			"mrs x2 , PMCCNTR_EL0\n\t"
+			"isb\n\t"
 			"mov %[before_hvc], x3\n\t"
 			"mov %[soh], x1\n\t"
 			"mov %[eoh], x4\n\t"
@@ -264,9 +268,13 @@ static unsigned long trap_in_test(void)
 #ifdef CONFIG_ARM64
 	asm volatile(
 			"mov x0, #0x10000\n\t"
+			"isb\n\t"
 			"mrs x3 , PMCCNTR_EL0\n\t"
+			"isb\n\t"
 			"hvc #0\n\t"
+			"isb\n\t"
 			"mrs x2 , PMCCNTR_EL0\n\t"
+			"isb\n\t"
 			"mov %[cc0], x3\n\t"
 			"mov %[cc1], x1\n\t"
 			"mov %[cc2], x2\n\t":
