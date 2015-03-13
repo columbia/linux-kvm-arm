@@ -162,6 +162,36 @@ static int decode_hsr(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	return 0;
 }
 
+/**
+ * handle_kernel_mmio - handle an in-kernel MMIO access
+ * @vcpu:	pointer to the vcpu performing the access
+ * @run:	pointer to the kvm_run structure
+ * @mmio:	pointer to the data describing the access
+ *
+ * returns true if the MMIO access has been performed in kernel space,
+ * and false if it needs to be emulated in user space.
+ */
+static bool handle_kernel_mmio(struct kvm_vcpu *vcpu, struct kvm_run *run,
+		struct kvm_exit_mmio *mmio)
+{
+	int ret;
+
+	if (mmio->is_write) {
+		ret = kvm_io_bus_write(vcpu, KVM_MMIO_BUS, mmio->phys_addr,
+				mmio->len, &mmio->data);
+
+	} else {
+		ret = kvm_io_bus_read(vcpu, KVM_MMIO_BUS, mmio->phys_addr,
+				mmio->len, &mmio->data);
+	}
+	if (!ret) {
+		kvm_prepare_mmio(run, mmio);
+		kvm_handle_mmio_return(vcpu, run);
+	}
+
+	return !ret;
+}
+
 int io_mem_abort(struct kvm_vcpu *vcpu, struct kvm_run *run,
 		 phys_addr_t fault_ipa)
 {
@@ -200,7 +230,7 @@ int io_mem_abort(struct kvm_vcpu *vcpu, struct kvm_run *run,
 			       fault_ipa, 0);
 	}
 
-	if (vgic_handle_mmio(vcpu, run, &mmio))
+	if (handle_kernel_mmio(vcpu, run, &mmio))
 		return 1;
 
 	kvm_prepare_mmio(run, &mmio);
