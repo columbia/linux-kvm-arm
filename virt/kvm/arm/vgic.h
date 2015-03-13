@@ -99,11 +99,6 @@ const
 struct vgic_io_range *vgic_find_range(const struct vgic_io_range *ranges,
 				      int len, gpa_t offset);
 
-bool vgic_handle_mmio_range(struct kvm_vcpu *vcpu, struct kvm_run *run,
-			    struct kvm_exit_mmio *mmio,
-			    const struct vgic_io_range *ranges,
-			    unsigned long mmio_base);
-
 bool vgic_handle_enable_reg(struct kvm *kvm, struct kvm_exit_mmio *mmio,
 			    phys_addr_t offset, int vcpu_id, int access);
 

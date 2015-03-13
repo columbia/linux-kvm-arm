@@ -141,8 +141,6 @@ struct vgic_params {
 };
 
 struct vgic_vm_ops {
-	bool	(*handle_mmio)(struct kvm_vcpu *, struct kvm_run *,
-			       struct kvm_exit_mmio *);
 	bool	(*queue_sgi)(struct kvm_vcpu *, int irq);
 	void	(*add_sgi_source)(struct kvm_vcpu *, int irq, int source);
 	int	(*init_model)(struct kvm *);

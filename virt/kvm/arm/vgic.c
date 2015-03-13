@@ -792,53 +792,6 @@ static bool call_range_handler(struct kvm_vcpu *vcpu,
 }
 
 /**
- * vgic_handle_mmio_range - handle an in-kernel MMIO access
- * @vcpu:	pointer to the vcpu performing the access
- * @run:	pointer to the kvm_run structure
- * @mmio:	pointer to the data describing the access
- * @ranges:	array of MMIO ranges in a given region
- * @mmio_base:	base address of that region
- *
- * returns true if the MMIO access could be performed
- */
-bool vgic_handle_mmio_range(struct kvm_vcpu *vcpu, struct kvm_run *run,
-			    struct kvm_exit_mmio *mmio,
-			    const struct vgic_io_range *ranges,
-			    unsigned long mmio_base)
-{
-	const struct vgic_io_range *range;
-	struct vgic_dist *dist = &vcpu->kvm->arch.vgic;
-	bool updated_state;
-	unsigned long offset;
-
-	offset = mmio->phys_addr - mmio_base;
-	range = vgic_find_range(ranges, mmio->len, offset);
-	if (unlikely(!range || !range->handle_mmio)) {
-		pr_warn("Unhandled access %d %08llx %d\n",
-			mmio->is_write, mmio->phys_addr, mmio->len);
-		return false;
-	}
-
-	spin_lock(&vcpu->kvm->arch.vgic.lock);
-	offset -= range->base;
-	if (vgic_validate_access(dist, range, offset)) {
-		updated_state = call_range_handler(vcpu, mmio, offset, range);
-	} else {
-		if (!mmio->is_write)
-			memset(mmio->data, 0, mmio->len);
-		updated_state = false;
-	}
-	spin_unlock(&vcpu->kvm->arch.vgic.lock);
-	kvm_prepare_mmio(run, mmio);
-	kvm_handle_mmio_return(vcpu, run);
-
-	if (updated_state)
-		vgic_kick_vcpus(vcpu->kvm);
-
-	return true;
-}
-
-/**
  * vgic_handle_mmio_access - handle an in-kernel MMIO access
  * This is called by the read/write KVM IO device wrappers below.
  * @vcpu:	pointer to the vcpu performing the access
@@ -896,30 +849,6 @@ static int vgic_handle_mmio_access(struct kvm_vcpu *vcpu,
 		vgic_kick_vcpus(vcpu->kvm);
 
 	return 0;
-}
-
-/**
- * vgic_handle_mmio - handle an in-kernel MMIO access for the GIC emulation
- * @vcpu:      pointer to the vcpu performing the access
- * @run:       pointer to the kvm_run structure
- * @mmio:      pointer to the data describing the access
- *
- * returns true if the MMIO access has been performed in kernel space,
- * and false if it needs to be emulated in user space.
- * Calls the actual handling routine for the selected VGIC model.
- */
-bool vgic_handle_mmio(struct kvm_vcpu *vcpu, struct kvm_run *run,
-		      struct kvm_exit_mmio *mmio)
-{
-	if (!irqchip_in_kernel(vcpu->kvm))
-		return false;
-
-	/*
-	 * This will currently call either vgic_v2_handle_mmio() or
-	 * vgic_v3_handle_mmio(), which in turn will call
-	 * vgic_handle_mmio_range() defined above.
-	 */
-	return vcpu->kvm->arch.vgic.vm_ops.handle_mmio(vcpu, run, mmio);
 }
 
 static int vgic_handle_mmio_read(struct kvm_vcpu *vcpu,
