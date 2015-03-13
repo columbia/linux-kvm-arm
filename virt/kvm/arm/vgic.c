@@ -971,6 +971,20 @@ int vgic_register_kvm_io_dev(struct kvm *kvm, gpa_t base, int len,
 	return 0;
 }
 
+static void vgic_unregister_kvm_io_dev(struct kvm *kvm)
+{
+	struct vgic_dist *dist = &kvm->arch.vgic;
+
+	if (!dist || !kvm->buses[KVM_MMIO_BUS])
+		return;
+
+	mutex_lock(&kvm->slots_lock);
+	if (dist->dist_iodev.dev.ops)
+		kvm_io_bus_unregister_dev(kvm, KVM_MMIO_BUS,
+					  &dist->dist_iodev.dev);
+	mutex_unlock(&kvm->slots_lock);
+}
+
 static int vgic_nr_shared_irqs(struct vgic_dist *dist)
 {
 	return dist->nr_irqs - VGIC_NR_PRIVATE_IRQS;
@@ -1702,6 +1716,8 @@ void kvm_vgic_destroy(struct kvm *kvm)
 	struct vgic_dist *dist = &kvm->arch.vgic;
 	struct kvm_vcpu *vcpu;
 	int i;
+
+	vgic_unregister_kvm_io_dev(kvm);
 
 	kvm_for_each_vcpu(i, vcpu, kvm)
 		kvm_vgic_vcpu_destroy(vcpu);
