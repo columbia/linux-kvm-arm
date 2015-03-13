@@ -974,6 +974,8 @@ int vgic_register_kvm_io_dev(struct kvm *kvm, gpa_t base, int len,
 static void vgic_unregister_kvm_io_dev(struct kvm *kvm)
 {
 	struct vgic_dist *dist = &kvm->arch.vgic;
+	struct vgic_io_device *iodevs;
+	int i;
 
 	if (!dist || !kvm->buses[KVM_MMIO_BUS])
 		return;
@@ -982,6 +984,18 @@ static void vgic_unregister_kvm_io_dev(struct kvm *kvm)
 	if (dist->dist_iodev.dev.ops)
 		kvm_io_bus_unregister_dev(kvm, KVM_MMIO_BUS,
 					  &dist->dist_iodev.dev);
+
+	iodevs = dist->redist_iodevs;
+	if (iodevs) {
+		for (i = 0; i < dist->nr_cpus * 2; i++) {
+			if (!iodevs[i].dev.ops)
+				continue;
+			kvm_io_bus_unregister_dev(kvm, KVM_MMIO_BUS,
+						  &iodevs[i].dev);
+		}
+		kfree(iodevs);
+		dist->redist_iodevs = NULL;
+	}
 	mutex_unlock(&kvm->slots_lock);
 }
 
