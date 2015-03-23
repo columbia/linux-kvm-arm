@@ -8,24 +8,29 @@
 
 struct backend_info {
         struct xenbus_device    *dev;
+	struct xen_simpleif        *simpleif;
         struct xenbus_watch     backend_watch;
 };
 
+static struct kmem_cache *xen_simpleif_cachep;
 static void backend_changed(struct xenbus_watch *watch,
                             const char **vec, unsigned int len);
 static int xen_simpleback_remove(struct xenbus_device *dev);
 
+/* TODO */
+static void xen_simpleif_free(void)
+{
+}
+
 int __init xen_simpleif_interface_init(void)
 {
-/*
-	xen_simpleif_cachep = kmem_cache_create("sampleif_cache",
-						sizeof(struct xen_sampleif),
+	xen_simpleif_cachep = kmem_cache_create("simpleif_cache",
+						sizeof(struct xen_simpleif),
 						0, 0, NULL);
 
 	if (!xen_simpleif_cachep)
 		return -ENOMEM;
 
-*/
 	return 0;
 }
 
@@ -33,6 +38,18 @@ static const struct xenbus_device_id xen_simpleback_ids[] = {
         { "vsimple" },
         { "" }
 };
+
+static struct xen_simpleif *xen_simpleif_alloc(domid_t domid)
+{
+	struct xen_simpleif *simpleif;
+	simpleif = kmem_cache_zalloc(xen_simpleif_cachep, GFP_KERNEL);
+	if (!simpleif)
+		return ERR_PTR(-ENOMEM);
+
+	simpleif->domid = domid;
+	return simpleif;
+
+}
 
 /*
  * Entry point to this code when a new device is created.  Allocate the basic
@@ -55,6 +72,17 @@ static int xen_simpleback_probe(struct xenbus_device *dev,
  	be->dev = dev;
         dev_set_drvdata(&dev->dev, be);
 
+	be->simpleif = xen_simpleif_alloc(dev->otherend_id);
+	if (IS_ERR(be->simpleif)) {
+		err = PTR_ERR(be->simpleif);
+		be->simpleif = NULL;
+		xenbus_dev_fatal(dev, err, "creating block interface");
+		goto fail;
+	}
+
+	/* setup back pointer */
+	be->simpleif->be = be;
+
         err = xenbus_watch_pathfmt(dev, &be->backend_watch, backend_changed,
                                    "%s/%s", dev->nodename, "simple-device");	
         if (err) {
@@ -63,13 +91,11 @@ static int xen_simpleback_probe(struct xenbus_device *dev,
 	}
 
 	printk("jintack dev->nodename is %s, and sucess\n", dev->nodename);
-/*
         err = xenbus_switch_state(dev, XenbusStateInitWait);
         if (err)
                 goto fail;
 
 	printk("jintack backend state is XenbusStateInitWait\n");
-*/
 
         return 0;
 
@@ -96,23 +122,86 @@ static int xen_simpleback_remove(struct xenbus_device *dev)
 */
         return 0;
 }
+
+static int xen_simpleif_map(struct xen_simpleif *simpleif, unsigned long shared_page,
+                         unsigned int evtchn)
+{
+	int err;
+	struct simpleif_sring *sring;
+	if (simpleif == NULL)
+		printk("jintack hahah simpleif s null\n");
+
+	if (simpleif->irq)
+		return 0;
+
+	if (simpleif->be->dev == NULL)
+		printk("jintack hahah dev is null\n");
+	if (simpleif->simple_ring == NULL)
+		printk("jintack hahah simple_ring is null\n");
+
+	err = xenbus_map_ring_valloc(simpleif->be->dev, shared_page, &simpleif->simple_ring);
+	if (err < 0)
+		return err;
+	
+	sring = (struct simpleif_sring *)simpleif->simple_ring;
+	if (sring == NULL)
+		printk("jintack hahah sring is null\n");
+	BACK_RING_INIT(&simpleif->simple_back_ring, sring, PAGE_SIZE);
+
+	err = bind_interdomain_evtchn_to_irqhandler(simpleif->domid, evtchn,
+			xen_simpleif_be_int, 0,
+			"simpleif-backend", simpleif);
+	if (err < 0) {
+		xenbus_unmap_ring_vfree(simpleif->be->dev, simpleif->simple_ring);
+		simpleif->simple_back_ring.sring = NULL;
+		return err;
+	}
+	simpleif->irq = err;
+	return 0;
+}
+
+static int connect_ring(struct backend_info *be)
+{
+
+	struct xenbus_device *dev = be->dev;
+	unsigned long ring_ref;
+	unsigned int evtchn;
+	int err;
+
+	err = xenbus_gather(XBT_NIL, dev->otherend, "ring-ref", "%lu",
+	                            &ring_ref, "event-channel", "%u", &evtchn, NULL);
+
+	if (err) {
+		xenbus_dev_fatal(dev, err,
+				"reading %s/ring-ref and event-channel",
+				dev->otherend);
+		return err;
+	}
+
+	err = xen_simpleif_map(be->simpleif, ring_ref, evtchn);
+	if (err) {
+		xenbus_dev_fatal(dev, err, "mapping ring-ref %lu port %u",
+				ring_ref, evtchn);
+		return err;
+	}
+
+	return 0;
+}
+
 /*
  * Callback received when the frontend's state changes.
  */
 static void frontend_changed(struct xenbus_device *dev,
                              enum xenbus_state frontend_state)
 {
-	printk("jintack %s state %d\n", __func__, frontend_state);
-#if 0
+
         struct backend_info *be = dev_get_drvdata(&dev->dev);
         int err;
-        DPRINTK("%s", xenbus_strstate(frontend_state));
 
+	printk("jintack %s state %d\n", __func__, frontend_state);
         switch (frontend_state) {
         case XenbusStateInitialising:
                 if (dev->state == XenbusStateClosed) {
-                        pr_info(DRV_PFX "%s: prepare for reconnect\n",
-                                dev->nodename);
                         xenbus_switch_state(dev, XenbusStateInitWait);
                 }
                 break;
@@ -127,19 +216,18 @@ static void frontend_changed(struct xenbus_device *dev,
                 if (dev->state == XenbusStateConnected)
                         break;
 
-                /*
-                 * Enforce precondition before potential leak point.
-                 * xen_blkif_disconnect() is idempotent.
-                 */
-                err = xen_blkif_disconnect(be->blkif);
-                if (err) {
-                        xenbus_dev_fatal(dev, err, "pending I/O");
-                        break;
-                }
                 err = connect_ring(be);
+		err = 0;
                 if (err)
                         break;
-                xen_update_blkif_status(be->blkif);
+
+		err = xenbus_switch_state(dev, XenbusStateConnected);
+		if (err) {
+			xenbus_dev_fatal(dev, err, "%s: switching to Connected state",
+					dev->nodename);
+			printk("jintack backed is NOT connected\n");
+		} else
+			printk("jintack backed is connected\n");
                 break;
 
         case XenbusStateClosing:
@@ -147,13 +235,14 @@ static void frontend_changed(struct xenbus_device *dev,
                 break;
 
         case XenbusStateClosed:
-                xen_blkif_disconnect(be->blkif);
+		//TODO
+                //xen_simpleif_disconnect(be->simpleif);
                 xenbus_switch_state(dev, XenbusStateClosed);
                 if (xenbus_dev_is_online(dev))
                         break;
                 /* fall through if not online */
         case XenbusStateUnknown:
-                /* implies xen_blkif_disconnect() via xen_blkbk_remove() */
+                /* implies xen_simpleif_disconnect() via xen_simplebk_remove() */
                 device_unregister(&dev->dev);
                 break;
 
@@ -162,7 +251,6 @@ static void frontend_changed(struct xenbus_device *dev,
                                  frontend_state);
                 break;
         }
-#endif
 }
 
 static void backend_changed(struct xenbus_watch *watch,
@@ -172,10 +260,8 @@ static void backend_changed(struct xenbus_watch *watch,
 	struct backend_info *be = container_of(watch,
                                                struct backend_info,
                                                backend_watch);
-	struct xenbus_device *dev = be->dev;
         char *str;
         unsigned int len;
-	int err;
 	printk("jintack %s is called.. sweet!\n", __func__);
 	printk("jintack %s, nodename: %s\n", __func__, be->dev->nodename);
 
@@ -190,15 +276,7 @@ static void backend_changed(struct xenbus_watch *watch,
         }
         kfree(str);
 
-	err = xenbus_switch_state(dev, XenbusStateConnected);
-        if (err) {
-                xenbus_dev_fatal(dev, err, "%s: switching to Connected state",
-                                 dev->nodename);
-		printk("jintack backed is NOT connected\n");
-	} else
-		printk("jintack backed is connected\n");
-
-        return;
+	        return;
 }
 static struct xenbus_driver xen_simpleback_driver = {
         .ids  = xen_simpleback_ids,

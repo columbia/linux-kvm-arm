@@ -14,13 +14,19 @@
 #include <xen/grant_table.h>
 #include <xen/xenbus.h>
 #include <xen/interface/io/ring.h>
+#include <xen/interface/io/simpleif.h>
 #include <xen/interface/io/protocols.h>
 
 int xen_simpleif_interface_init(void);
 int xen_simpleif_xenbus_init(void);
+irqreturn_t xen_simpleif_be_int(int irq, void *dev_id);
 
 struct xen_simpleif{
 	domid_t 	domid;
+	 unsigned int            irq;
+	 struct backend_info     *be;
+	 void                    *simple_ring;
+	 struct simpleif_back_ring	simple_back_ring;
 };
 
 #endif /* __XEN_SIMPLEIF__BACKEND__COMMON_H__ */

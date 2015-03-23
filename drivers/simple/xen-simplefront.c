@@ -16,19 +16,150 @@
 #include <xen/platform_pci.h>
 
 #include <xen/interface/grant_table.h>
+#include <xen/interface/io/simpleif.h>
 #include <xen/interface/io/protocols.h>
 
 #include <asm/xen/hypervisor.h>
 
+#define GRANT_INVALID_REF       0
+
+#define SIMPLE_RING_SIZE __CONST_RING_SIZE(simpleif, PAGE_SIZE)
+
 struct simplefront_info
 {
 	struct xenbus_device 	*dev;
+	int	ring_ref;
+	struct simpleif_front_ring ring;
+	unsigned int evtchn, irq;
 };
+
+static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
+{
+	printk("jintack simple frontend get response from backend\n");
+/*
+	
+	struct blkfront_info *info = (struct blkfront_info *)dev_id;
+	RING_IDX i, rp;
+	int more_to_do;
+	struct blkif_response *bret;
+
+	rp = info->ring.sring->rsp_prod;
+        rmb(); 
+	i = info->ring.rep_cons;
+	bret = RING_GET_RESPONSE(&info->ring, i);
+	switch (bret->operation)
+	{
+		case 9:
+			printk("jintack CONGRATS front notified with op 9\n");
+		default:
+			printk("jintack front notified but with %d\n", bret->operation);
+
+	}
+
+	info->ring.rsp_cons = i;
+	info->ring.sring->rsp_event = i+1;
+	RING_FINAL_CHECK_FOR_RESPONSES(&info->ring, more_to_do);
+
+	if (more_to_do)
+		printk("jintack more_to_do??\n");
+*/
+	return IRQ_HANDLED;
+}
+
+static int setup_simplering(struct xenbus_device *dev,
+                         struct simplefront_info *info)
+{
+	struct simpleif_sring *sring;
+	int err;
+
+	info->ring_ref = GRANT_INVALID_REF;
+
+	sring = (struct simpleif_sring *)__get_free_page(GFP_NOIO | __GFP_HIGH);
+	if (!sring) {
+		printk("jintack fail to alloc shared ring\n");
+		xenbus_dev_fatal(dev, -ENOMEM, "allocating shared ring");
+		return -ENOMEM;
+	}
+
+	SHARED_RING_INIT(sring);
+	FRONT_RING_INIT(&info->ring, sring, PAGE_SIZE);
+	err = xenbus_grant_ring(dev, virt_to_mfn(info->ring.sring));
+	if (err < 0) {
+		free_page((unsigned long)sring);
+		info->ring.sring = NULL;
+		return err;
+	}
+	info->ring_ref = err;
+
+	err = xenbus_alloc_evtchn(dev, &info->evtchn);
+	if (err)
+		return err;
+
+	err = bind_evtchn_to_irqhandler(info->evtchn, simpleif_interrupt, 0,
+			"simpleif", info);
+	info->irq = err;
+
+	return 0;
+}
+
+static int talk_to_simpleback(struct xenbus_device *dev,
+                           struct simplefront_info *info)
+{
+	const char *message = NULL;
+	struct xenbus_transaction xbt;
+	int err;
+
+	err = setup_simplering(dev, info);
+	if (err <0) {
+		printk("jintack fail to setup simple ring\n");
+		return err;
+	}
+
+again:
+	err = xenbus_transaction_start(&xbt);
+	if (err) {
+		xenbus_dev_fatal(dev, err, "starting transaction");
+		goto destroy_blkring;
+	}
+
+	err = xenbus_printf(xbt, dev->nodename,
+			"ring-ref", "%u", info->ring_ref);
+	if (err) {
+		message = "writing ring-ref";
+		goto abort_transaction;
+	}
+	err = xenbus_printf(xbt, dev->nodename,
+			"event-channel", "%u", info->evtchn);
+	if (err) {
+		message = "writing event-channel";
+		goto abort_transaction;
+	}
+
+	err = xenbus_transaction_end(xbt, 0);
+	if (err) {
+		if (err == -EAGAIN)
+			goto again;
+		xenbus_dev_fatal(dev, err, "completing transaction");
+		goto destroy_blkring;
+	}
+
+abort_transaction:
+	xenbus_transaction_end(xbt, 1);
+	if (message)
+		xenbus_dev_fatal(dev, err, "%s", message);
+destroy_blkring:
+	//blkif_free(info, 0);
+	return err;
+
+
+
+}
 
 static int simplefront_probe(struct xenbus_device *dev,
                           const struct xenbus_device_id *id)
 {
 	struct simplefront_info *info;
+	int err;
 
 	info = kzalloc(sizeof(*info), GFP_KERNEL);
 	if (!info) {
@@ -38,6 +169,13 @@ static int simplefront_probe(struct xenbus_device *dev,
 
 	info->dev = dev;
 	dev_set_drvdata(&dev->dev, info);
+
+	err = talk_to_simpleback(dev, info);
+	if (err) {
+		kfree(info);
+		dev_set_drvdata(&dev->dev, NULL);
+		return err;
+	}
 	printk("jintack %s is called. awesome\n", __func__);
 	return 0;
 }
@@ -50,6 +188,23 @@ static int simplefront_remove(struct xenbus_device *xbdev)
 
 static int simplefront_resume(struct xenbus_device *dev)
 {
+	return 0;
+}
+
+static int simpleif_request_dummy(struct xenbus_device *dev)
+{
+	struct simplefront_info *info = dev_get_drvdata(&dev->dev);
+	struct simpleif_request *ring_req;
+	int notify;
+	printk("jintack [front] Let's send a request\n");
+
+	ring_req = RING_GET_REQUEST(&info->ring, info->ring.req_prod_pvt);
+	ring_req->operation = 9;
+	info->ring.req_prod_pvt++;
+
+	RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&info->ring, notify);
+	if (notify)
+		notify_remote_via_irq(info->irq);
 	return 0;
 }
 
@@ -66,16 +221,21 @@ static void simpleback_changed(struct xenbus_device *dev,
 
 	switch (backend_state) {
 	
-	case XenbusStateConnected:
-		printk("jintack before front switch\n");
+
+	case XenbusStateInitWait:
 		err = xenbus_switch_state(info->dev, XenbusStateConnected);
-		printk("jintack after front switch\n");
 		if (err) {
 			xenbus_dev_fatal(dev, err, "%s: switching to Connected state",
 					dev->nodename);
 			printk("jintack front is NOT connected: %d\n", err);
 		} else
 			printk("jintack [front] IS connected\n");
+
+		break;
+
+	case XenbusStateConnected:
+		/* TODO: This should be a fuction which is visible to the kernel */
+		simpleif_request_dummy(dev);
 		return;
 	default:
 		return;
