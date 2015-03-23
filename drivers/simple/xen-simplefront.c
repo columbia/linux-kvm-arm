@@ -20,9 +20,24 @@
 
 #include <asm/xen/hypervisor.h>
 
+struct simplefront_info
+{
+	struct xenbus_device 	*dev;
+};
+
 static int simplefront_probe(struct xenbus_device *dev,
                           const struct xenbus_device_id *id)
 {
+	struct simplefront_info *info;
+
+	info = kzalloc(sizeof(*info), GFP_KERNEL);
+	if (!info) {
+		xenbus_dev_fatal(dev, -ENOMEM, "allocating info structure");
+		return -ENOMEM;
+	}
+
+	info->dev = dev;
+	dev_set_drvdata(&dev->dev, info);
 	printk("jintack %s is called. awesome\n", __func__);
 	return 0;
 }
@@ -44,6 +59,28 @@ static int simplefront_resume(struct xenbus_device *dev)
 static void simpleback_changed(struct xenbus_device *dev,
                             enum xenbus_state backend_state)
 {
+	struct simplefront_info *info = dev_get_drvdata(&dev->dev);
+	int err;
+	printk("jintack simpleback changed to state %d\n", backend_state);
+	printk("jintack simplefront state is %d\n", dev->state);
+
+	switch (backend_state) {
+	
+	case XenbusStateConnected:
+		printk("jintack before front switch\n");
+		err = xenbus_switch_state(info->dev, XenbusStateConnected);
+		printk("jintack after front switch\n");
+		if (err) {
+			xenbus_dev_fatal(dev, err, "%s: switching to Connected state",
+					dev->nodename);
+			printk("jintack front is NOT connected: %d\n", err);
+		} else
+			printk("jintack [front] IS connected\n");
+		return;
+	default:
+		return;
+	}
+
 }
 
 static int simplefront_is_ready(struct xenbus_device *dev)

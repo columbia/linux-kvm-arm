@@ -187,6 +187,8 @@ __xenbus_switch_state(struct xenbus_device *dev,
 	int current_state;
 	int err, abort;
 
+
+	printk("jintack __switch %s\n", dev->nodename);
 	if (state == dev->state)
 		return 0;
 
@@ -195,19 +197,25 @@ again:
 
 	err = xenbus_transaction_start(&xbt);
 	if (err) {
+		printk("jintack transaction start fail %s errno: %d\n", dev->nodename, err);
 		xenbus_switch_fatal(dev, depth, err, "starting transaction");
 		return 0;
 	}
 
 	err = xenbus_scanf(xbt, dev->nodename, "state", "%d", &current_state);
-	if (err != 1)
+	if (err != 1) {
+		printk("jintack scanf fail %s errno: %d\n", dev->nodename, err);
 		goto abort;
+	}
 
 	err = xenbus_printf(xbt, dev->nodename, "state", "%d", state);
 	if (err) {
+		printk("jintack write fail %s errno: %d\n", dev->nodename, err);
+		
 		xenbus_switch_fatal(dev, depth, err, "writing new state");
 		goto abort;
 	}
+	printk("jintack write NO fail %s\n", dev->nodename);
 
 	abort = 0;
 abort:
