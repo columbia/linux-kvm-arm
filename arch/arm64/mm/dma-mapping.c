@@ -473,7 +473,7 @@ static void arm64_acpi_set_dma_ops(void *_dev)
 	}
 }
 #else
-static inline arm64_acpi_set_dma_ops(void *_dev) {}
+static inline void arm64_acpi_set_dma_ops(void *_dev) {}
 #endif
 
 static int dma_bus_notifier(struct notifier_block *nb,
@@ -510,10 +510,12 @@ static int __init arm64_dma_init(void)
 {
 	int ret;
 
+#ifdef CONFIG_ACPI
 	if (IS_ENABLED(CONFIG_ACPI)) {
 		bus_register_notifier(&platform_bus_type, &platform_bus_nb);
 		bus_register_notifier(&amba_bustype, &amba_bus_nb);
 	}
+#endif
 	if (IS_ENABLED(CONFIG_PCI))
 		bus_register_notifier(&pci_bus_type, &pci_bus_nb);
 
