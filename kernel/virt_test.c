@@ -158,13 +158,15 @@ static unsigned long noop_test(void)
 	return ret;
 }
 
+extern int simpleif_request_dummy(void);
 static unsigned long mmio_user(void)
 {
 	unsigned long ret, cc_before, cc_after;
 	u32 val;
 
 	cc_before = read_cc();
-	val = readl(mmio_read_user_addr + 0x8); // MMIO USER
+	//val = readl(mmio_read_user_addr + 0x8); // MMIO USER
+	simpleif_request_dummy();
 	cc_after = read_cc();
 	ret = CYCLE_COUNT(cc_before, cc_after);
 	return ret;

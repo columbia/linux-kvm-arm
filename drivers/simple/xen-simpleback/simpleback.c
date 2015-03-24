@@ -36,9 +36,9 @@ static int __init xen_simpleif_init(void)
 /*
  * Notification from the guest OS.
  */
+/*
 static void simpleif_notify_work(struct xen_simpleif *simpleif)
 {
-	/* TODO: Read request? */
 	int notify;
 	struct simpleif_response resp;
 	struct simpleif_back_ring* br = &simpleif->simple_back_ring;
@@ -47,14 +47,15 @@ static void simpleif_notify_work(struct xen_simpleif *simpleif)
 	br->rsp_prod_pvt++;
 	RING_PUSH_RESPONSES_AND_CHECK_NOTIFY(br, notify);
 	//if (notify)
-		notify_remote_via_irq(simpleif->irq);
 }
+*/
 
 irqreturn_t xen_simpleif_be_int(int irq, void *dev_id)
 {
-	printk("jintack simple back got interrupt!\n");
-	simpleif_notify_work(dev_id);
-	printk("jintack simple back push response!\n");
+	struct xen_simpleif *simpleif=dev_id;
+	notify_remote_via_irq(simpleif->irq);
+//	HYPERVISOR_sched_op(SCHEDOP_yield, NULL);
+	//printk("jintack simple back push response!\n");
 	return IRQ_HANDLED;
 }
 

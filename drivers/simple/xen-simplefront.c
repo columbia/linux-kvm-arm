@@ -25,6 +25,23 @@
 
 #define SIMPLE_RING_SIZE __CONST_RING_SIZE(simpleif, PAGE_SIZE)
 
+
+static __always_inline volatile unsigned long read_cc(void)
+{
+	unsigned long cc;
+#ifdef CONFIG_ARM64
+	isb();
+	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+	isb();
+#else
+	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#endif
+	return cc;
+}
+
+unsigned long cc_before;
+unsigned long cc_after;
+
 struct simplefront_info
 {
 	struct xenbus_device 	*dev;
@@ -35,7 +52,10 @@ struct simplefront_info
 
 static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
 {
-	printk("jintack simple frontend get response from backend\n");
+	
+	cc_after = read_cc();
+//	printk("jintack simple frontend get response from backend\n");
+	trace_printk("before:\t%lu\tafter:\t%lu\tdiff:\t%lu\n", cc_before, cc_after, cc_after - cc_before);
 /*
 	
 	struct blkfront_info *info = (struct blkfront_info *)dev_id;
@@ -191,20 +211,24 @@ static int simplefront_resume(struct xenbus_device *dev)
 	return 0;
 }
 
-static int simpleif_request_dummy(struct xenbus_device *dev)
+struct xenbus_device *gdev;
+int simpleif_request_dummy(void)
 {
+	struct xenbus_device *dev = gdev;
 	struct simplefront_info *info = dev_get_drvdata(&dev->dev);
 	struct simpleif_request *ring_req;
 	int notify;
-	printk("jintack [front] Let's send a request\n");
+	//printk("jintack [front] Let's send a request\n");
 
 	ring_req = RING_GET_REQUEST(&info->ring, info->ring.req_prod_pvt);
 	ring_req->operation = 9;
 	info->ring.req_prod_pvt++;
 
 	RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&info->ring, notify);
-	if (notify)
-		notify_remote_via_irq(info->irq);
+	cc_before = 100; /* make cache hot */
+	cc_before = read_cc();
+	notify_remote_via_irq(info->irq);
+	HYPERVISOR_sched_op(SCHEDOP_block, NULL);
 	return 0;
 }
 
@@ -231,11 +255,12 @@ static void simpleback_changed(struct xenbus_device *dev,
 		} else
 			printk("jintack [front] IS connected\n");
 
+		gdev = dev;
 		break;
 
 	case XenbusStateConnected:
 		/* TODO: This should be a fuction which is visible to the kernel */
-		simpleif_request_dummy(dev);
+		simpleif_request_dummy();
 		return;
 	default:
 		return;
