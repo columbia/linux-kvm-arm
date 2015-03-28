@@ -42,6 +42,8 @@
 #define HVC_VMSWITCH_SEND	0x4b000010
 #define HVC_VMSWITCH_RCV	0x4b000020
 #define HVC_VMSWITCH_DONE	0x4b000030
+#define TRAP_MEASURE_START	0x10000
+#define TRAP_MEASURE_END	0x11000
 
 static void *mmio_read_user_addr;
 static void *vgic_dist_addr;
@@ -336,6 +338,22 @@ static unsigned long vmswitch_recv_test(void)
 	return ret;
 }
 
+static unsigned long trap_profile_start(void)
+{
+	unsigned long ret = 0;
+	kvm_call_hyp((void*)TRAP_MEASURE_START);
+	trace_printk("started!\n");
+	return ret;
+}
+
+static unsigned long trap_profile_end(void)
+{
+	unsigned long ret = 0;
+	kvm_call_hyp((void*)TRAP_MEASURE_END);
+	trace_printk("ended!\n");
+	return ret;
+}
+
 struct virt_test available_tests[] = {
 	{ "hvc",		hvc_test	},
 	{ "mmio_read_user",	mmio_user	},
@@ -347,6 +365,8 @@ struct virt_test available_tests[] = {
 	{ "trap-out",		trap_out_test	},
 	{ "vmswitch_send",	vmswitch_send_test	},
 	{ "vmswitch_recv",	vmswitch_recv_test	},
+	{ "trap-profile-start", trap_profile_start      },
+	{ "trap-profile-end",   trap_profile_end        },
 };
 
 static int init_mmio_test(void)
