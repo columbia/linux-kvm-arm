@@ -161,8 +161,18 @@ struct kvm_vm_stat {
 	u32 remote_tlb_flush;
 };
 
+#define TRAP_STAT_NR 4
+#define TRAP_HVC 0
+#define TRAP_WFX 1
+#define TRAP_IO_KERNEL 2
+#define TRAP_IO_USER 3
+
 struct kvm_vcpu_stat {
 	u32 halt_wakeup;
+	unsigned long trap_stat[TRAP_STAT_NR];
+	unsigned long ent_trap_cc;
+	unsigned long prev_trap_cc;
+	unsigned long prev_trap_type;
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,

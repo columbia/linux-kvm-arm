@@ -27,10 +27,54 @@
 #include <asm/kvm_psci.h>
 
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
+extern bool enable_trap_stats;
+
+static const char* trap_stat_names[TRAP_STAT_NR] = {
+	[TRAP_HVC] = "TRAP HVC",
+	[TRAP_WFX] = "TRAP WFX",
+	[TRAP_IO_KERNEL] = "TRAP IO KERNEL",
+	[TRAP_IO_USER] = "TRAP IO USER",
+};
+
+static void print_vcpu_trap_stats(struct kvm_vcpu *vcpu)
+{
+	int i;
+
+	for (i = 0; i < TRAP_STAT_NR; i++)
+		printk("%s CYCLE %lu\n",
+			trap_stat_names[i],
+			vcpu->stat.trap_stat[i]);
+}
 
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
+
+	vcpu->stat.prev_trap_type = TRAP_HVC;
+	/*
+	 * Enable cycle counter for Xen - we choose to be compatible but rely
+	 * on running measurement guests under perf on the KVM host.
+	 */
+	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+		return 1;
+	}
+
+	/* NOOP hvc call to measure hypercall turn-around time */
+	if (*vcpu_reg(vcpu, 0) == 0x4b000000) {
+		return 1;
+	}
+	/* Trap stat enable */
+	if (*vcpu_reg(vcpu, 0) == 0x10000) {
+		enable_trap_stats = true;
+		return 1;               
+	}
+
+	/* Trap stat disable & print out stats */
+	if (*vcpu_reg(vcpu, 0) == 0x11000) {
+		print_vcpu_trap_stats(vcpu);
+		enable_trap_stats = false;
+		return 1;
+	}
 
 	ret = kvm_psci_call(vcpu);
 	if (ret < 0) {
@@ -61,6 +105,7 @@ static int handle_smc(struct kvm_vcpu *vcpu, struct kvm_run *run)
  */
 static int kvm_handle_wfx(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
+	vcpu->stat.prev_trap_type = TRAP_WFX;
 	if (kvm_vcpu_get_hsr(vcpu) & ESR_EL2_EC_WFI_ISS_WFE)
 		kvm_vcpu_on_spin(vcpu);
 	else

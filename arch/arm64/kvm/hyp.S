@@ -36,6 +36,12 @@
 	.pushsection	.hyp.text, "ax"
 	.align	PAGE_SHIFT
 
+.macro read_ccounter reg
+	isb
+	mrs \reg, PMCCNTR_EL0
+	isb
+.endm
+
 .macro save_common_regs
 	// x2: base address for cpu context
 	// x3: tmp register
@@ -168,6 +174,10 @@
 	// x19-x29, lr, sp*, elr*, spsr*
 	restore_common_regs
 
+	read_ccounter x2
+	ldr     x1, [x0, #VCPU_ENT_TRAP_CC]
+	sub     x2, x2, x1
+	str     x2, [x0, #VCPU_PREV_TRAP_CC]
 	// Last bits of the 64bit state
 	pop	x2, x3
 	pop	x0, x1
@@ -769,7 +779,7 @@
 
 	mrs	x2, mdcr_el2
 	and	x2, x2, #MDCR_EL2_HPMN_MASK
-	orr	x2, x2, #(MDCR_EL2_TPM | MDCR_EL2_TPMCR)
+	bic    x2, x2, #(MDCR_EL2_TPM | MDCR_EL2_TPMCR)
 	orr	x2, x2, #(MDCR_EL2_TDRA | MDCR_EL2_TDOSA)
 
 	// Check for KVM_ARM64_DEBUG_DIRTY, and set debug to trap
@@ -1224,6 +1234,9 @@ el1_trap:
 	str	w1, [x0, #VCPU_ESR_EL2]
 	str	x2, [x0, #VCPU_FAR_EL2]
 	str	x3, [x0, #VCPU_HPFAR_EL2]
+
+	read_ccounter x2
+	str     x2, [x0, #VCPU_ENT_TRAP_CC]
 
 	mov	x1, #ARM_EXCEPTION_TRAP
 	b	__kvm_vcpu_return
