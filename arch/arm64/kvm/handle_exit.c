@@ -41,10 +41,20 @@ static void print_vcpu_trap_stats(struct kvm_vcpu *vcpu)
 {
 	int i;
 
+	printk("vcpu id %d\n", vcpu->vcpu_id);
 	for (i = 0; i < TRAP_STAT_NR; i++)
 		printk("%s CYCLE %lu\n",
 			trap_stat_names[i],
 			vcpu->stat.trap_stat[i]);
+}
+
+static void print_all_vcpu_trap_stats(struct kvm_vcpu *vcpu)
+{
+	struct kvm_vcpu *v;
+	int r;
+
+	kvm_for_each_vcpu(r, v, vcpu->kvm)
+		print_vcpu_trap_stats(v);
 }
 
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
@@ -72,8 +82,8 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 	/* Trap stat disable & print out stats */
 	if (*vcpu_reg(vcpu, 0) == 0x11000) {
-		print_vcpu_trap_stats(vcpu);
 		enable_trap_stats = false;
+		print_all_vcpu_trap_stats(vcpu);
 		return 1;
 	}
 
