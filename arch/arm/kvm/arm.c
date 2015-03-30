@@ -71,6 +71,7 @@ static void update_trap_stats(struct kvm_vcpu *vcpu)
 	type = vcpu->stat.prev_trap_type;
 	if (type != -1)
 		vcpu->stat.trap_stat[type] += vcpu->stat.prev_trap_cc;
+	vcpu->stat.prev_trap_type = -1;
 }
 
 static inline void init_trap_stats(struct kvm_vcpu *vcpu)
@@ -588,6 +589,10 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 		if (enable_trap_stats)
 			update_trap_stats(vcpu);
+
+		if (ret == ARM_EXCEPTION_IRQ)
+			vcpu->stat.prev_trap_type = TRAP_IRQ;
+
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		vcpu->arch.last_pcpu = smp_processor_id();
 		kvm_guest_exit();

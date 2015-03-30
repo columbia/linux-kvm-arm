@@ -34,6 +34,7 @@ static const char* trap_stat_names[TRAP_STAT_NR] = {
 	[TRAP_WFX] = "TRAP WFX",
 	[TRAP_IO_KERNEL] = "TRAP IO KERNEL",
 	[TRAP_IO_USER] = "TRAP IO USER",
+	[TRAP_IRQ] = "TRAP IRQ",
 };
 
 static void print_vcpu_trap_stats(struct kvm_vcpu *vcpu)

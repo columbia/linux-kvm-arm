@@ -161,11 +161,12 @@ struct kvm_vm_stat {
 	u32 remote_tlb_flush;
 };
 
-#define TRAP_STAT_NR 4
+#define TRAP_STAT_NR 5
 #define TRAP_HVC 0
 #define TRAP_WFX 1
 #define TRAP_IO_KERNEL 2
 #define TRAP_IO_USER 3
+#define TRAP_IRQ 4
 
 struct kvm_vcpu_stat {
 	u32 halt_wakeup;
