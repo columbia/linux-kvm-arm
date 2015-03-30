@@ -442,7 +442,7 @@ static void arm64_of_set_dma_ops(void *_dev)
 	while (dev) {
 		if (dev->of_node) {
 			if (of_dma_is_coherent(dev->of_node))
-				set_dma_ops(_dev, &coherent_swiotlb_dma_ops);
+				set_arch_dma_coherent_ops(_dev);
 			break;
 		}
 		dev = dev->parent;
@@ -474,7 +474,7 @@ static void arm64_acpi_set_dma_ops(void *_dev)
 			status =  acpi_check_coherency(ACPI_HANDLE(dev),
 						       &coherent);
 			if (ACPI_FAILURE(status) || coherent)
-				set_dma_ops(_dev, &coherent_swiotlb_dma_ops);
+				set_arch_dma_coherent_ops(_dev);
 			break;
 		}
 		dev = dev->parent;
