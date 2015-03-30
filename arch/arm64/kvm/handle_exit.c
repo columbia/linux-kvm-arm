@@ -76,6 +76,7 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	}
 	/* Trap stat enable */
 	if (*vcpu_reg(vcpu, 0) == 0x10000) {
+		init_trap_stats(vcpu);
 		enable_trap_stats = true;
 		return 1;               
 	}

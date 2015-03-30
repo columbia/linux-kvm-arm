@@ -74,7 +74,7 @@ static void update_trap_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.prev_trap_type = -1;
 }
 
-static inline void init_trap_stats(struct kvm_vcpu *vcpu)
+void init_trap_stats(struct kvm_vcpu *vcpu)
 {
 	u32 tmp;
 
