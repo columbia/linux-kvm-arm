@@ -175,6 +175,7 @@
 	restore_common_regs
 
 	read_ccounter x2
+	str     x2, [x0, #VCPU_LAST_ENTER_CC]
 	ldr     x1, [x0, #VCPU_ENT_TRAP_CC]
 	sub     x2, x2, x1
 	str     x2, [x0, #VCPU_PREV_TRAP_CC]

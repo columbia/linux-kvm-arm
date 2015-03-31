@@ -35,6 +35,8 @@ static const char* trap_stat_names[TRAP_STAT_NR] = {
 	[TRAP_IO_KERNEL] = "TRAP IO KERNEL",
 	[TRAP_IO_USER] = "TRAP IO USER",
 	[TRAP_IRQ] = "TRAP IRQ",
+	[TRAP_TOTAL] = "TRAP TOTAL",
+	[TRAP_GUEST] = "TRAP GUEST",
 };
 
 static void print_vcpu_trap_stats(struct kvm_vcpu *vcpu)
@@ -60,6 +62,7 @@ static void print_all_vcpu_trap_stats(struct kvm_vcpu *vcpu)
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
+	uint32_t tmp;
 
 	vcpu->stat.prev_trap_type = TRAP_HVC;
 	/*
@@ -67,6 +70,26 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	 * on running measurement guests under perf on the KVM host.
 	 */
 	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+
+		asm volatile(   "mrs %0, PMCR_EL0\n"
+				"orr %0, %0, #1\n"
+				"orr %0, %0, #(1 << 2)\n"
+				"bic %0, %0, #(1 << 3)\n"
+				"msr PMCR_EL0, %0\n"
+				"mov %0, #0b11111\n"
+				"msr PMSELR_EL0, %0\n"
+				"isb \n"
+				"mrs %0, PMXEVTYPER_EL0\n"
+				"orr %0, %0, #(1 << 27)\n"
+				"bic %0, %0, #(3 << 30)\n"
+				"bic %0, %0, #(3 << 28)\n"
+				"msr PMXEVTYPER_EL0, %0\n"
+				"mrs %0, PMCNTENSET_EL0\n"
+				"orr %0, %0, #(1 << 31)\n"
+				"msr PMCNTENSET_EL0, %0\n"
+				: "=r" (tmp));
+		isb();
+
 		return 1;
 	}
 

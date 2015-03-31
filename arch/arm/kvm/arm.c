@@ -72,6 +72,10 @@ static void update_trap_stats(struct kvm_vcpu *vcpu)
 	if (type != -1)
 		vcpu->stat.trap_stat[type] += vcpu->stat.prev_trap_cc;
 	vcpu->stat.prev_trap_type = -1;
+
+	vcpu->stat.trap_stat[TRAP_TOTAL] += vcpu->stat.prev_trap_cc;
+	vcpu->stat.trap_stat[TRAP_GUEST] += (vcpu->stat.ent_trap_cc - vcpu->stat.last_enter_cc);
+
 }
 
 void __init_trap_stats(struct kvm_vcpu *vcpu)
@@ -79,8 +83,8 @@ void __init_trap_stats(struct kvm_vcpu *vcpu)
 	u32 tmp;
 
 	vcpu->stat.prev_trap_type = -1;
-	vcpu->stat.prev_trap_cc = 0;
-	vcpu->stat.ent_trap_cc = 0;
+//	vcpu->stat.prev_trap_cc = 0;
+//	vcpu->stat.ent_trap_cc = 0;
 	for (tmp=0; tmp<TRAP_STAT_NR; tmp++)
 		vcpu->stat.trap_stat[tmp] = 0;
 }
