@@ -338,11 +338,13 @@ static unsigned long vmswitch_recv_test(void)
 	return ret;
 }
 
+unsigned long cc_start, cc_end;
 static unsigned long trap_profile_start(void)
 {
 	unsigned long ret = 0;
-	kvm_call_hyp((void*)TRAP_MEASURE_START);
 	trace_printk("started!\n");
+	cc_start = read_cc();
+	kvm_call_hyp((void*)TRAP_MEASURE_START);
 	return ret;
 }
 
@@ -350,6 +352,8 @@ static unsigned long trap_profile_end(void)
 {
 	unsigned long ret = 0;
 	kvm_call_hyp((void*)TRAP_MEASURE_END);
+	cc_end = read_cc();
+	trace_printk("start: %lu, end: %lu, diff: %lu\n", cc_start, cc_end, cc_end - cc_start);
 	trace_printk("ended!\n");
 	return ret;
 }
