@@ -1255,6 +1255,8 @@ el1_irq:
 	push	x0, x1
 	push	x2, x3
 	mrs	x0, tpidr_el2
+	read_ccounter x2
+	str     x2, [x0, #VCPU_ENT_TRAP_CC]
 	mov	x1, #ARM_EXCEPTION_IRQ
 	b	__kvm_vcpu_return
 
