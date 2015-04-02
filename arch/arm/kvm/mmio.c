@@ -230,9 +230,12 @@ int io_mem_abort(struct kvm_vcpu *vcpu, struct kvm_run *run,
 			       fault_ipa, 0);
 	}
 
-	if (handle_kernel_mmio(vcpu, run, &mmio))
+	if (handle_kernel_mmio(vcpu, run, &mmio)) {
+		vcpu->stat.prev_trap_type = TRAP_IO_KERNEL;
 		return 1;
+	}
 
 	kvm_prepare_mmio(run, &mmio);
+	vcpu->stat.prev_trap_type = TRAP_IO_USER;
 	return 0;
 }

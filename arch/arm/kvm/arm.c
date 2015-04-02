@@ -61,6 +61,42 @@ static atomic64_t kvm_vmid_gen = ATOMIC64_INIT(1);
 static u8 kvm_next_vmid;
 static DEFINE_SPINLOCK(kvm_vmid_lock);
 
+bool enable_trap_stats = false;
+
+static void update_trap_stats(struct kvm_vcpu *vcpu)
+{
+	unsigned type;
+
+	type = vcpu->stat.prev_trap_type;
+	if (type != -1)
+		vcpu->stat.trap_stat[type] += vcpu->stat.prev_trap_cc;
+	vcpu->stat.prev_trap_type = -1;
+
+	vcpu->stat.trap_stat[TRAP_TOTAL] += vcpu->stat.prev_trap_cc;
+	vcpu->stat.trap_stat[TRAP_GUEST] += (vcpu->stat.ent_trap_cc - vcpu->stat.last_enter_cc);
+
+}
+
+void __init_trap_stats(struct kvm_vcpu *vcpu)
+{
+	u32 tmp;
+
+	vcpu->stat.prev_trap_type = -1;
+	//     vcpu->stat.prev_trap_cc = 0;
+	//     vcpu->stat.ent_trap_cc = 0;
+	for (tmp=0; tmp<TRAP_STAT_NR; tmp++)
+		vcpu->stat.trap_stat[tmp] = 0;
+}
+
+void init_trap_stats(struct kvm_vcpu *vcpu)
+{
+	struct kvm_vcpu *v;
+	int r;
+
+	kvm_for_each_vcpu(r, v, vcpu->kvm)
+		__init_trap_stats(v);
+}
+
 static void kvm_arm_set_running_vcpu(struct kvm_vcpu *vcpu)
 {
 	BUG_ON(preemptible());
@@ -440,11 +476,51 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
 {
 	struct kvm *kvm = vcpu->kvm;
 	int ret;
+       u32 tmp;
 
 	if (likely(vcpu->arch.has_run_once))
 		return 0;
 
 	vcpu->arch.has_run_once = true;
+#ifdef CONFIG_ARM
+	asm volatile(   "mrc p15, 0, %0, c9, c12, 0\n" /* PMCR */
+			"orr %0, %0, #1\n"      /* PMCR.E=1 */
+			"orr %0, %0, #(1 << 2)\n"       /* Reset Cycle cnt */
+			"bic %0, %0, #(1 << 3)\n"       /* Count each cycle */
+			"mcr p15, 0, %0, c9, c12, 0\n" /* PMCR */
+			"mov %0, #0b11111\n"    /* Select cycle cnt */
+			"mcr p15, 0, %0, c9, c12, 5\n" /* PCSELR */
+			"isb \n"
+			"mrc p15, 0, %0, c9, c13, 1\n" /* PMXEVTYPER */
+			"orr %0, %0, #(1 << 27)\n"      /* Count PL2 */
+			"bic %0, %0, #(3 << 30)\n"      /* not NS PL1, PL0 */
+			"bic %0, %0, #(3 << 28)\n"      /* SBZ */
+			"mcr p15, 0, %0, c9, c13, 1\n" /* PMXEVTYPER */
+			"mrc p15, 0, %0, c9, c12, 1\n" /* PMCNTENSET */
+			"orr %0, %0, #(1 << 31)\n"      /* Enable Cycle cnt */
+			"mcr p15, 0, %0, c9, c12, 1\n"  /* PMCNTENSET */
+			: "=r" (tmp));
+#else
+	asm volatile(   "mrs %0, PMCR_EL0\n"
+			"orr %0, %0, #1\n"
+			"orr %0, %0, #(1 << 2)\n"
+			"bic %0, %0, #(1 << 3)\n"
+			"msr PMCR_EL0, %0\n"
+			"mov %0, #0b11111\n"
+			"msr PMSELR_EL0, %0\n"
+			"isb \n"
+			"mrs %0, PMXEVTYPER_EL0\n"
+			"orr %0, %0, #(1 << 27)\n"
+			"bic %0, %0, #(3 << 30)\n"
+			"bic %0, %0, #(3 << 28)\n"
+			"msr PMXEVTYPER_EL0, %0\n"
+			"mrs %0, PMCNTENSET_EL0\n"
+			"orr %0, %0, #(1 << 31)\n"
+			"msr PMCNTENSET_EL0, %0\n"
+			: "=r" (tmp));
+#endif
+	isb();
+	init_trap_stats(vcpu);
 
 	/*
 	 * Map the VGIC hardware resources before running a vcpu the first
@@ -557,6 +633,12 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		vcpu->mode = IN_GUEST_MODE;
 
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
+
+		if (enable_trap_stats)
+			update_trap_stats(vcpu);
+
+		if (ret == ARM_EXCEPTION_IRQ)
+			vcpu->stat.prev_trap_type = TRAP_IRQ;
 
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		kvm_guest_exit();

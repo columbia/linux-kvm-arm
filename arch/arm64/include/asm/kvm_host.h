@@ -163,9 +163,24 @@ struct kvm_vm_stat {
 	u32 remote_tlb_flush;
 };
 
+#define TRAP_STAT_NR 7
+#define TRAP_HVC 0
+#define TRAP_WFX 1
+#define TRAP_IO_KERNEL 2
+#define TRAP_IO_USER 3
+#define TRAP_IRQ 4
+#define TRAP_TOTAL 5
+#define TRAP_GUEST 6
+
 struct kvm_vcpu_stat {
 	u32 halt_successful_poll;
 	u32 halt_wakeup;
+	unsigned long trap_stat[TRAP_STAT_NR];
+	unsigned long ent_trap_cc;
+	unsigned long prev_trap_cc;
+	unsigned long prev_trap_type;
+	unsigned long last_enter_cc;
+	unsigned long this_exit_cc;
 };
 
 int kvm_vcpu_preferred_target(struct kvm_vcpu_init *init);
@@ -249,5 +264,6 @@ static inline void kvm_arch_hardware_unsetup(void) {}
 static inline void kvm_arch_sync_events(struct kvm *kvm) {}
 static inline void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu) {}
 static inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
+void init_trap_stats(struct kvm_vcpu *vcpu);
 
 #endif /* __ARM64_KVM_HOST_H__ */
