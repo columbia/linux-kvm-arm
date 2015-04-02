@@ -32,8 +32,8 @@ extern bool enable_trap_stats;
 static const char* trap_stat_names[TRAP_STAT_NR] = {
 	[TRAP_HVC] = "TRAP HVC",
 	[TRAP_WFX] = "TRAP WFX",
-	[TRAP_IO_KERNEL] = "TRAP IO KERNEL",
-	[TRAP_IO_USER] = "TRAP IO USER",
+	[TRAP_IO_KERNEL] = "TRAP IO_KERNEL",
+	[TRAP_IO_USER] = "TRAP IO_USER",
 	[TRAP_IRQ] = "TRAP IRQ",
 	[TRAP_TOTAL] = "TRAP TOTAL",
 	[TRAP_GUEST] = "TRAP GUEST",
