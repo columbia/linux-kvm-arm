@@ -61,6 +61,46 @@ static atomic64_t kvm_vmid_gen = ATOMIC64_INIT(1);
 static u8 kvm_next_vmid;
 static DEFINE_SPINLOCK(kvm_vmid_lock);
 
+bool enable_trap_stats = false;
+
+static void update_trap_stats(struct kvm_vcpu *vcpu)
+{
+	unsigned type;
+
+	type = vcpu->stat.prev_trap_type;
+	if (type != -1) {
+		vcpu->stat.trap_stat[type] += vcpu->stat.prev_trap_cc;
+		++vcpu->stat.trap_number[type];
+	}
+	vcpu->stat.prev_trap_type = -1;
+
+	vcpu->stat.trap_stat[TRAP_TOTAL] += vcpu->stat.prev_trap_cc;
+	vcpu->stat.trap_stat[TRAP_GUEST] += (vcpu->stat.ent_trap_cc - vcpu->stat.last_enter_cc);
+
+}
+
+void __init_trap_stats(struct kvm_vcpu *vcpu)
+{
+	u32 tmp;
+
+	vcpu->stat.prev_trap_type = -1;
+	//     vcpu->stat.prev_trap_cc = 0;
+	//     vcpu->stat.ent_trap_cc = 0;
+	for (tmp=0; tmp<TRAP_STAT_NR; tmp++) {
+		vcpu->stat.trap_stat[tmp] = 0;
+		vcpu->stat.trap_number[tmp] = 0;
+	}
+}
+
+void init_trap_stats(struct kvm_vcpu *vcpu)
+{
+	struct kvm_vcpu *v;
+	int r;
+
+	kvm_for_each_vcpu(r, v, vcpu->kvm)
+		__init_trap_stats(v);
+}
+
 static void kvm_arm_set_running_vcpu(struct kvm_vcpu *vcpu)
 {
 	BUG_ON(preemptible());

@@ -194,6 +194,13 @@ struct kvm_vcpu_stat {
 	u32 halt_successful_poll;
 	u32 halt_attempted_poll;
 	u32 halt_wakeup;
+	unsigned long trap_stat[TRAP_STAT_NR];
+	unsigned long trap_number[TRAP_STAT_NR];
+	unsigned long ent_trap_cc;
+	unsigned long prev_trap_cc;
+	unsigned long prev_trap_type;
+	unsigned long last_enter_cc;
+	unsigned long this_exit_cc;
 };
 
 int kvm_vcpu_preferred_target(struct kvm_vcpu_init *init);
