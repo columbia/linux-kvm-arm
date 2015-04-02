@@ -390,4 +390,20 @@ static inline void __cpu_init_stage2(void)
 		  "PARange is %d bits, unsupported configuration!", parange);
 }
 
+static inline unsigned long virt_test_call_hyp(void* num, ...)
+{
+	unsigned long ret;
+
+	asm (
+		"mov	x0, %1\n\t"
+		"hvc	#0\n\t"
+		"mov	%0, x0\n\t"
+		: "=r" (ret)
+		: "r" (num)
+		: "x0", "cc"
+	);
+
+	return ret;
+}
+
 #endif /* __ARM64_KVM_HOST_H__ */
