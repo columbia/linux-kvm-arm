@@ -123,6 +123,16 @@ static inline void gic_set_base_accessor(struct gic_chip_data *data,
 #define gic_set_base_accessor(d, f)
 #endif
 
+void *gic_data_dist_base_ex(void)
+{
+	return (void*)gic_data_dist_base(&gic_data[0]);
+}
+
+void *gic_data_cpu_base_ex(void)
+{
+	return (void*)gic_data_cpu_base(&gic_data[0]);
+}
+
 static inline void __iomem *gic_dist_base(struct irq_data *d)
 {
 	struct gic_chip_data *gic_data = irq_data_get_irq_chip_data(d);
