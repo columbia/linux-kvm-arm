@@ -182,10 +182,13 @@
 	ldr	x3, [x0, #VCPU_SCHED_OUT_CC]
 	add	x2, x2, x3
 	str     x2, [x0, #VCPU_PREV_TRAP_CC]
+	b	done_rest
 skip_sched_cc:
+	//str     x2, [x0, #VCPU_LAST_ENTER_CC]
 	ldr     x1, [x0, #VCPU_ENT_TRAP_CC]
 	sub     x2, x2, x1
 	str     x2, [x0, #VCPU_PREV_TRAP_CC]
+done_rest:
 	// Last bits of the 64bit state
 	pop	x2, x3
 	pop	x0, x1

@@ -130,6 +130,7 @@ int main(void)
   DEFINE(VCPU_PREV_TRAP_CC,    	offsetof(struct kvm_vcpu, stat.prev_trap_cc));
   DEFINE(VCPU_SCHED_IN_CC,    	offsetof(struct kvm_vcpu, stat.sched_in_cc));
   DEFINE(VCPU_SCHED_OUT_CC,    	offsetof(struct kvm_vcpu, stat.sched_out_cc));
+  DEFINE(VCPU_LAST_ENTER_CC,   	offsetof(struct kvm_vcpu, stat.last_enter_cc));
 
   DEFINE(KVM_TIMER_CNTVOFF,	offsetof(struct kvm, arch.timer.cntvoff));
   DEFINE(KVM_TIMER_ENABLED,	offsetof(struct kvm, arch.timer.enabled));

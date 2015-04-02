@@ -91,6 +91,8 @@ static void update_trap_stats(struct kvm_vcpu *vcpu)
 		vcpu->stat.trap_stat[type] += vcpu->stat.prev_trap_cc;
 	vcpu->stat.prev_trap_type = -1;
 	reset_trap_preempt_stats(vcpu);
+	/*vcpu->stat.trap_stat[TRAP_TOTAL] += vcpu->stat.prev_trap_cc;
+	vcpu->stat.trap_stat[TRAP_GUEST] += (vcpu->stat.ent_trap_cc - vcpu->stat.last_enter_cc);*/
 }
 
 static void __init_trap_stats(struct kvm_vcpu *vcpu)
