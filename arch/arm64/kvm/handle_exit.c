@@ -50,9 +50,10 @@ static void print_vcpu_trap_stats(struct kvm_vcpu *vcpu)
 
 	printk("vcpu id %d\n", vcpu->vcpu_id);
 	for (i = 0; i < TRAP_STAT_NR; i++)
-		printk("%s CYCLE %lu\n",
+		printk("%s CYCLE %lu number: %lu\n",
 				trap_stat_names[i],
-				vcpu->stat.trap_stat[i]);
+				vcpu->stat.trap_stat[i],
+				vcpu->stat.trap_number[i]);
 }
 
 static void print_all_vcpu_trap_stats(struct kvm_vcpu *vcpu)

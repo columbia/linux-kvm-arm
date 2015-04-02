@@ -176,6 +176,7 @@ struct kvm_vcpu_stat {
 	u32 halt_successful_poll;
 	u32 halt_wakeup;
 	unsigned long trap_stat[TRAP_STAT_NR];
+	unsigned long trap_number[TRAP_STAT_NR];
 	unsigned long ent_trap_cc;
 	unsigned long prev_trap_cc;
 	unsigned long prev_trap_type;
