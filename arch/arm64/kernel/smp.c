@@ -36,6 +36,7 @@
 #include <linux/completion.h>
 #include <linux/of.h>
 #include <linux/irq_work.h>
+#include <linux/virt_test.h>
 
 #include <asm/alternative.h>
 #include <asm/atomic.h>
@@ -68,6 +69,7 @@ enum ipi_msg_type {
 	IPI_CPU_STOP,
 	IPI_TIMER,
 	IPI_IRQ_WORK,
+	IPI_VIRTTEST,
 };
 
 /*
@@ -485,6 +487,7 @@ static const char *ipi_types[NR_IPI] __tracepoint_string = {
 	S(IPI_CPU_STOP, "CPU stop interrupts"),
 	S(IPI_TIMER, "Timer broadcast interrupts"),
 	S(IPI_IRQ_WORK, "IRQ work interrupts"),
+	S(IPI_VIRTTEST, "Virt Test interrupts"),
 };
 
 static void smp_cross_call(const struct cpumask *target, unsigned int ipinr)
@@ -605,6 +608,12 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 		break;
 #endif
 
+	case IPI_VIRTTEST:
+		irq_enter();
+		cpu1_ipi_ack = 1;
+		irq_exit();
+		break;
+
 	default:
 		pr_crit("CPU%u: Unknown IPI message 0x%x\n", cpu, ipinr);
 		break;
@@ -613,6 +622,11 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 	if ((unsigned)ipinr < NR_IPI)
 		trace_ipi_exit(ipi_types[ipinr]);
 	set_irq_regs(old_regs);
+}
+
+void smp_send_virttest(int cpu)
+{
+	smp_cross_call(cpumask_of(cpu), IPI_VIRTTEST);
 }
 
 void smp_send_reschedule(int cpu)

@@ -80,6 +80,7 @@
 #include <linux/list.h>
 #include <linux/integrity.h>
 #include <linux/proc_ns.h>
+#include <linux/virt_test.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
