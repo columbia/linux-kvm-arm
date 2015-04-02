@@ -32,6 +32,37 @@
 #include "trace.h"
 
 typedef int (*exit_handle_fn)(struct kvm_vcpu *, struct kvm_run *);
+extern bool enable_trap_stats;
+
+static const char* trap_stat_names[TRAP_STAT_NR] = {
+	[TRAP_HVC] = "TRAP HVC",
+	[TRAP_WFX] = "TRAP WFX",
+	[TRAP_IO_KERNEL] = "TRAP IO_KERNEL",
+	[TRAP_IO_USER] = "TRAP IO_USER",
+	[TRAP_IRQ] = "TRAP IRQ",
+	[TRAP_TOTAL] = "TRAP TOTAL",
+	[TRAP_GUEST] = "TRAP GUEST",
+};
+
+static void print_vcpu_trap_stats(struct kvm_vcpu *vcpu)
+{
+	int i;
+
+	printk("vcpu id %d\n", vcpu->vcpu_id);
+	for (i = 0; i < TRAP_STAT_NR; i++)
+		printk("%s CYCLE %lu\n",
+				trap_stat_names[i],
+				vcpu->stat.trap_stat[i]);
+}
+
+static void print_all_vcpu_trap_stats(struct kvm_vcpu *vcpu)
+{
+	struct kvm_vcpu *v;
+	int r;
+
+	kvm_for_each_vcpu(r, v, vcpu->kvm)
+		print_vcpu_trap_stats(v);
+}
 
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
