@@ -64,6 +64,24 @@ static DEFINE_SPINLOCK(kvm_vmid_lock);
 static bool vgic_present;
 bool enable_trap_stats = false;
 
+inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
+{
+	vcpu->stat.sched_in_cc = kvm_arm_read_cc();
+}
+
+inline void kvm_arch_sched_out(struct kvm_vcpu *vcpu)
+{
+	vcpu->stat.sched_out_cc = kvm_arm_read_cc();
+	if (vcpu->stat.sched_out_cc > vcpu->stat.ent_trap_cc)
+		vcpu->stat.sched_out_cc -= vcpu->stat.ent_trap_cc;
+}
+
+void inline reset_trap_preempt_stats(struct kvm_vcpu *vcpu)
+{
+	vcpu->stat.sched_in_cc = 0;
+	vcpu->stat.sched_out_cc = 0;
+}
+
 static void update_trap_stats(struct kvm_vcpu *vcpu)
 {
 	unsigned type;
@@ -72,9 +90,10 @@ static void update_trap_stats(struct kvm_vcpu *vcpu)
 	if (type != -1)
 		vcpu->stat.trap_stat[type] += vcpu->stat.prev_trap_cc;
 	vcpu->stat.prev_trap_type = -1;
+	reset_trap_preempt_stats(vcpu);
 }
 
-void __init_trap_stats(struct kvm_vcpu *vcpu)
+static void __init_trap_stats(struct kvm_vcpu *vcpu)
 {
 	u32 tmp;
 
@@ -83,6 +102,7 @@ void __init_trap_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.ent_trap_cc = 0;
 	for (tmp=0; tmp<TRAP_STAT_NR; tmp++)
 		vcpu->stat.trap_stat[tmp] = 0;
+	reset_trap_preempt_stats(vcpu);
 }
 
 void init_trap_stats(struct kvm_vcpu *vcpu)

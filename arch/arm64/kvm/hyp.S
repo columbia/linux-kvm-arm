@@ -175,6 +175,14 @@
 	restore_common_regs
 
 	read_ccounter x2
+	ldr	x3, [x0, #VCPU_SCHED_IN_CC]
+	cmp	x3, #0
+	beq	skip_sched_cc
+	sub     x2, x2, x3
+	ldr	x3, [x0, #VCPU_SCHED_OUT_CC]
+	add	x2, x2, x3
+	str     x2, [x0, #VCPU_PREV_TRAP_CC]
+skip_sched_cc:
 	ldr     x1, [x0, #VCPU_ENT_TRAP_CC]
 	sub     x2, x2, x1
 	str     x2, [x0, #VCPU_PREV_TRAP_CC]

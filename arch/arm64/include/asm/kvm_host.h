@@ -174,6 +174,8 @@ struct kvm_vcpu_stat {
 	unsigned long ent_trap_cc;
 	unsigned long prev_trap_cc;
 	unsigned long prev_trap_type;
+	unsigned long sched_in_cc;
+	unsigned long sched_out_cc;
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,
@@ -263,6 +265,22 @@ static inline void kvm_arch_hardware_disable(void) {}
 static inline void kvm_arch_hardware_unsetup(void) {}
 static inline void kvm_arch_sync_events(struct kvm *kvm) {}
 static inline void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu) {}
-static inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
+
+static inline unsigned long kvm_arm_read_cc(void)
+{
+	unsigned long cc;
+
+	asm volatile(
+		"isb\n"
+		"mrs %0, PMCCNTR_EL0\n"
+		"isb\n"
+		: [reg] "=r" (cc));
+	return cc;
+}
+
+extern inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
+
+extern inline void kvm_arch_sched_out(struct kvm_vcpu *vcpu) {}
+
 void init_trap_stats(struct kvm_vcpu *vcpu);
 #endif /* __ARM64_KVM_HOST_H__ */
