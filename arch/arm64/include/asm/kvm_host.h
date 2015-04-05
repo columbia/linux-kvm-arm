@@ -161,7 +161,7 @@ struct kvm_vm_stat {
 	u32 remote_tlb_flush;
 };
 
-#define TRAP_STAT_NR 7
+#define TRAP_STAT_NR 5
 #define TRAP_HVC 0
 #define TRAP_WFX 1
 #define TRAP_IO_KERNEL 2
@@ -180,6 +180,7 @@ struct kvm_vcpu_stat {
 	unsigned long sched_out_cc;
 	unsigned long last_enter_cc;
 	unsigned long this_exit_cc;
+	int prev_cpu;
 };
 
 int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,
@@ -282,9 +283,8 @@ static inline unsigned long kvm_arm_read_cc(void)
 	return cc;
 }
 
-extern inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
-
-extern inline void kvm_arch_sched_out(struct kvm_vcpu *vcpu) {}
+extern void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu);
+extern void kvm_arch_sched_out(struct kvm_vcpu *vcpu);
 
 void init_trap_stats(struct kvm_vcpu *vcpu);
 #endif /* __ARM64_KVM_HOST_H__ */

@@ -64,19 +64,25 @@ static DEFINE_SPINLOCK(kvm_vmid_lock);
 static bool vgic_present;
 bool enable_trap_stats = false;
 
-inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
+void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 {
-	vcpu->stat.sched_in_cc = kvm_arm_read_cc();
+	if (vcpu->stat.prev_cpu != smp_processor_id()) {
+		printk("prev %d curr %d\n", vcpu->stat.prev_cpu,
+					smp_processor_id());
+		printk("%lu\n", vcpu->stat.sched_out_cc);
+		vcpu->stat.sched_in_cc = kvm_arm_read_cc();
+	}
 }
 
-inline void kvm_arch_sched_out(struct kvm_vcpu *vcpu)
+void kvm_arch_sched_out(struct kvm_vcpu *vcpu)
 {
+	vcpu->stat.prev_cpu = smp_processor_id();
 	vcpu->stat.sched_out_cc = kvm_arm_read_cc();
 	if (vcpu->stat.sched_out_cc > vcpu->stat.ent_trap_cc)
 		vcpu->stat.sched_out_cc -= vcpu->stat.ent_trap_cc;
 }
 
-void inline reset_trap_preempt_stats(struct kvm_vcpu *vcpu)
+static void inline reset_trap_preempt_stats(struct kvm_vcpu *vcpu)
 {
 	vcpu->stat.sched_in_cc = 0;
 	vcpu->stat.sched_out_cc = 0;
@@ -90,7 +96,6 @@ static void update_trap_stats(struct kvm_vcpu *vcpu)
 	if (type != -1)
 		vcpu->stat.trap_stat[type] += vcpu->stat.prev_trap_cc;
 	vcpu->stat.prev_trap_type = -1;
-	reset_trap_preempt_stats(vcpu);
 	/*vcpu->stat.trap_stat[TRAP_TOTAL] += vcpu->stat.prev_trap_cc;
 	vcpu->stat.trap_stat[TRAP_GUEST] += (vcpu->stat.ent_trap_cc - vcpu->stat.last_enter_cc);*/
 }
@@ -102,6 +107,8 @@ static void __init_trap_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.prev_trap_type = -1;
 	vcpu->stat.prev_trap_cc = 0;
 	vcpu->stat.ent_trap_cc = 0;
+	vcpu->stat.prev_cpu = -1;
+
 	for (tmp=0; tmp<TRAP_STAT_NR; tmp++)
 		vcpu->stat.trap_stat[tmp] = 0;
 	reset_trap_preempt_stats(vcpu);
@@ -470,15 +477,10 @@ static void update_vttbr(struct kvm *kvm)
 	spin_unlock(&kvm_vmid_lock);
 }
 
-static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
+void enable_cc(void* info)
 {
-	int ret;
 	u32 tmp;
 
-	if (likely(vcpu->arch.has_run_once))
-		return 0;
-
-	vcpu->arch.has_run_once = true;
 #ifdef CONFIG_ARM
 	asm volatile(   "mrc p15, 0, %0, c9, c12, 0\n" /* PMCR */
 			"orr %0, %0, #1\n"      /* PMCR.E=1 */
@@ -517,6 +519,18 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
 			: "=r" (tmp));
 #endif
 	isb();
+	printk("ENABLE CC on %d\n", smp_processor_id());
+}
+
+static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
+{
+	int ret;
+
+	if (likely(vcpu->arch.has_run_once))
+		return 0;
+
+	vcpu->arch.has_run_once = true;
+
 	init_trap_stats(vcpu);
 
 	/*
@@ -528,6 +542,8 @@ static int kvm_vcpu_first_run_init(struct kvm_vcpu *vcpu)
 		if (ret)
 			return ret;
 	}
+
+	on_each_cpu(enable_cc, NULL, 1);
 
 	return 0;
 }
@@ -618,6 +634,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
 
+		reset_trap_preempt_stats(vcpu);
 		if (enable_trap_stats)
 			update_trap_stats(vcpu);
 
