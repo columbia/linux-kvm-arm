@@ -64,13 +64,26 @@ static DEFINE_SPINLOCK(kvm_vmid_lock);
 static bool vgic_present;
 bool enable_trap_stats = false;
 
+void kvm_arm_read_cc_remote(void* info)
+{
+	struct kvm_vcpu *vcpu = info;
+	unsigned long diff = 0;
+
+	diff = kvm_arm_read_cc() -
+		vcpu->stat.sched_out_cc;
+	vcpu->stat.sched_out_cc += diff;
+}
+
 void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 {
-	if (vcpu->stat.prev_cpu != smp_processor_id()) {
+	int curr_cpu = smp_processor_id();
+	if (vcpu->stat.prev_cpu != curr_cpu) {
 		printk("prev %d curr %d\n", vcpu->stat.prev_cpu,
 					smp_processor_id());
 		printk("%lu\n", vcpu->stat.sched_out_cc);
 		vcpu->stat.sched_in_cc = kvm_arm_read_cc();
+		smp_call_function_single(vcpu->stat.prev_cpu,
+			kvm_arm_read_cc_remote, vcpu, 1);
 	}
 }
 
