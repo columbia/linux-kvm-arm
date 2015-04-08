@@ -179,7 +179,7 @@
 	cmp	x3, #0
 	beq	skip_sched_cc
 	sub     x2, x2, x3
-	ldr	x3, [x0, #VCPU_SCHED_OUT_CC]
+	ldr	x3, [x0, #VCPU_SCHED_DELTA]
 	add	x2, x2, x3
 	str     x2, [x0, #VCPU_PREV_TRAP_CC]
 	b	done_rest

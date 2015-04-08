@@ -178,6 +178,7 @@ struct kvm_vcpu_stat {
 	unsigned long prev_trap_type;
 	unsigned long sched_in_cc;
 	unsigned long sched_out_cc;
+	unsigned long delta;
 	unsigned long last_enter_cc;
 	unsigned long this_exit_cc;
 	int prev_cpu;

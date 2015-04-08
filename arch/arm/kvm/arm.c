@@ -67,16 +67,22 @@ bool enable_trap_stats = false;
 void kvm_arm_read_cc_remote(void* info)
 {
 	struct kvm_vcpu *vcpu = info;
-	unsigned long diff = 0;
+	unsigned long diff = 0, cycles = 0;
 
-	diff = kvm_arm_read_cc() -
-		vcpu->stat.sched_out_cc;
-	vcpu->stat.sched_out_cc += diff;
+	cycles = kvm_arm_read_cc(); 
+	diff = cycles - vcpu->stat.sched_out_cc;
+	if(diff > cycles)
+		return;
+	vcpu->stat.delta += diff;
 }
 
 void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 {
 	int curr_cpu = smp_processor_id();
+
+	if (enable_trap_stats == false)
+		return;
+
 	if (vcpu->stat.prev_cpu != curr_cpu) {
 		printk("prev %d curr %d\n", vcpu->stat.prev_cpu,
 					smp_processor_id());
@@ -89,16 +95,23 @@ void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 
 void kvm_arch_sched_out(struct kvm_vcpu *vcpu)
 {
+	if (enable_trap_stats == false)
+		return;
+
 	vcpu->stat.prev_cpu = smp_processor_id();
-	vcpu->stat.sched_out_cc = kvm_arm_read_cc();
-	if (vcpu->stat.sched_out_cc > vcpu->stat.ent_trap_cc)
-		vcpu->stat.sched_out_cc -= vcpu->stat.ent_trap_cc;
+	if (!vcpu->stat.sched_out_cc) {
+		vcpu->stat.sched_out_cc = kvm_arm_read_cc();
+		vcpu->stat.delta = vcpu->stat.sched_out_cc - 
+				vcpu->stat.ent_trap_cc;
+	} else
+		vcpu->stat.sched_out_cc = kvm_arm_read_cc();
 }
 
 static void inline reset_trap_preempt_stats(struct kvm_vcpu *vcpu)
 {
 	vcpu->stat.sched_in_cc = 0;
 	vcpu->stat.sched_out_cc = 0;
+	vcpu->stat.delta = 0;
 }
 
 static void update_trap_stats(struct kvm_vcpu *vcpu)
@@ -106,7 +119,7 @@ static void update_trap_stats(struct kvm_vcpu *vcpu)
 	unsigned type;
 
 	type = vcpu->stat.prev_trap_type;
-	if (type != -1)
+	if (type != -1 && vcpu->stat.prev_trap_cc < 1000000000000) // Simply ignore outlier
 		vcpu->stat.trap_stat[type] += vcpu->stat.prev_trap_cc;
 	vcpu->stat.prev_trap_type = -1;
 	/*vcpu->stat.trap_stat[TRAP_TOTAL] += vcpu->stat.prev_trap_cc;
