@@ -39,7 +39,8 @@
 
 .macro read_ccounter reg
 	isb
-	mrs \reg, PMCCNTR_EL0
+	#mrs \reg, PMCCNTR_EL0
+	mrs \reg, cntvct_el0
 	isb
 .endm
 
