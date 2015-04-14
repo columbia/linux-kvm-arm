@@ -39,6 +39,13 @@
 	.pushsection	.hyp.text, "ax"
 	.align	PAGE_SHIFT
 
+.macro read_ccounter reg
+	isb
+	#mrs \reg, PMCCNTR_EL0
+	mrs \reg, cntvct_el0
+	isb
+.endm
+
 .macro save_common_regs
 	// x2: base address for cpu context
 	// x3: tmp register
