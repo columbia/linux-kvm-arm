@@ -163,7 +163,7 @@ struct kvm_vm_stat {
 	u32 remote_tlb_flush;
 };
 
-#define TRAP_STAT_NR 7
+#define TRAP_STAT_NR 9
 #define TRAP_HVC 0
 #define TRAP_WFX 1
 #define TRAP_IO_KERNEL 2
@@ -171,6 +171,8 @@ struct kvm_vm_stat {
 #define TRAP_IRQ 4
 #define TRAP_TOTAL 5
 #define TRAP_GUEST 6
+#define TRAP_EL2 7
+#define TRAP_KVM_HVSOR 8
 
 struct kvm_vcpu_stat {
 	u32 halt_successful_poll;
@@ -182,7 +184,25 @@ struct kvm_vcpu_stat {
 	unsigned long prev_trap_type;
 	unsigned long last_enter_cc;
 	unsigned long this_exit_cc;
+	/* For EL2 Overhead */
+	unsigned long el2_exit_cc;
+	unsigned long el2_enter_cc;
+	/* For scheding Overhead */
+	unsigned long sched_out_cc;
+	unsigned long sched_in_cc;
 };
+
+static inline unsigned long kvm_arm_read_cc(void)
+{
+        unsigned long cc;
+
+        asm volatile(
+                "isb\n"
+                "mrs %0, cntvct_el0\n"
+                "isb\n"
+                : [reg] "=r" (cc));
+        return cc;
+}
 
 int kvm_vcpu_preferred_target(struct kvm_vcpu_init *init);
 unsigned long kvm_arm_num_regs(struct kvm_vcpu *vcpu);
@@ -264,7 +284,8 @@ static inline void kvm_arch_hardware_disable(void) {}
 static inline void kvm_arch_hardware_unsetup(void) {}
 static inline void kvm_arch_sync_events(struct kvm *kvm) {}
 static inline void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu) {}
-static inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
+extern void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu);
+extern void kvm_arch_sched_out(struct kvm_vcpu *vcpu);
 void init_trap_stats(struct kvm_vcpu *vcpu);
 
 #endif /* __ARM64_KVM_HOST_H__ */

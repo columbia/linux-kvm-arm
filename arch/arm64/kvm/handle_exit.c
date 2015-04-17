@@ -42,6 +42,8 @@ static const char* trap_stat_names[TRAP_STAT_NR] = {
 	[TRAP_IRQ] = "TRAP IRQ",
 	[TRAP_TOTAL] = "TRAP TOTAL",
 	[TRAP_GUEST] = "TRAP GUEST",
+	[TRAP_EL2] = "TRAP EL2",
+	[TRAP_KVM_HVSOR] = "TRAP KVM HVSOR",
 };
 
 static void print_vcpu_trap_stats(struct kvm_vcpu *vcpu)
