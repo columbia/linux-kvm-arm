@@ -63,6 +63,32 @@ static DEFINE_SPINLOCK(kvm_vmid_lock);
 
 bool enable_trap_stats = false;
 
+void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
+{
+	unsigned long tmp;
+	unsigned long diff;
+
+	if (enable_trap_stats == false)
+		return;
+	tmp = kvm_arm_read_cc();
+	/*Prevent overflow*/
+	if (tmp > vcpu->stat.sched_out_cc)
+		diff = tmp - vcpu->stat.sched_out_cc;
+	else
+		diff = 0;
+	vcpu->stat.sched_in_cc += diff;
+
+	++vcpu->stat.trap_number[TRAP_KVM_HVSOR];
+}
+
+void kvm_arch_sched_out(struct kvm_vcpu *vcpu)
+{
+
+	if (enable_trap_stats == false)
+		return;
+	vcpu->stat.sched_out_cc = kvm_arm_read_cc();
+}
+
 static void update_trap_stats(struct kvm_vcpu *vcpu)
 {
 	unsigned type;
@@ -75,8 +101,13 @@ static void update_trap_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.prev_trap_type = -1;
 
 	vcpu->stat.trap_stat[TRAP_TOTAL] += vcpu->stat.prev_trap_cc;
-	vcpu->stat.trap_stat[TRAP_GUEST] += (vcpu->stat.ent_trap_cc - vcpu->stat.last_enter_cc);
+	vcpu->stat.trap_stat[TRAP_GUEST] += (vcpu->stat.ent_trap_cc - 
+			vcpu->stat.last_enter_cc);
 
+	vcpu->stat.trap_stat[TRAP_EL2] += (vcpu->stat.el2_exit_cc -
+			vcpu->stat.ent_trap_cc) + 
+			(vcpu->stat.last_enter_cc -
+				vcpu->stat.el2_enter_cc);
 }
 
 void __init_trap_stats(struct kvm_vcpu *vcpu)
@@ -84,8 +115,13 @@ void __init_trap_stats(struct kvm_vcpu *vcpu)
 	u32 tmp;
 
 	vcpu->stat.prev_trap_type = -1;
-	//     vcpu->stat.prev_trap_cc = 0;
-	//     vcpu->stat.ent_trap_cc = 0;
+	//vcpu->stat.prev_trap_cc = 0;
+	//vcpu->stat.ent_trap_cc = 0;
+	vcpu->stat.el2_enter_cc = 0;
+	vcpu->stat.el2_exit_cc = 0;
+	vcpu->stat.sched_out_cc = 0;
+	vcpu->stat.sched_in_cc = 0;
+
 	for (tmp=0; tmp<TRAP_STAT_NR; tmp++) {
 		vcpu->stat.trap_stat[tmp] = 0;
 		vcpu->stat.trap_number[tmp] = 0;
@@ -607,12 +643,23 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		__kvm_guest_enter();
 		vcpu->mode = IN_GUEST_MODE;
 
+		if (enable_trap_stats) {
+			vcpu->stat.el2_enter_cc = kvm_arm_read_cc();
+			vcpu->stat.trap_stat[TRAP_KVM_HVSOR] +=
+				vcpu->stat.sched_in_cc;
+			vcpu->stat.sched_in_cc = 0;
+		}
+
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
 
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		/*
 		 * Back from guest
 		 *************************************************************/
+		if (enable_trap_stats) {
+			vcpu->stat.el2_exit_cc = kvm_arm_read_cc();
+			update_trap_stats(vcpu);
+		}
 
 		kvm_arm_clear_debug(vcpu);
 

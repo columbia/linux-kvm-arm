@@ -3513,6 +3513,9 @@ static void kvm_sched_out(struct preempt_notifier *pn,
 
 	if (current->state == TASK_RUNNING)
 		vcpu->preempted = true;
+
+	kvm_arch_sched_out(vcpu);
+
 	kvm_arch_vcpu_put(vcpu);
 }
 
