@@ -70,15 +70,16 @@ void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 
 	if (enable_trap_stats == false)
 		return;
+
 	tmp = kvm_arm_read_cc();
 	/*Prevent overflow*/
 	if (tmp > vcpu->stat.sched_out_cc)
 		diff = tmp - vcpu->stat.sched_out_cc;
 	else
 		diff = 0;
-	vcpu->stat.sched_in_cc += diff;
+	vcpu->stat.sched_diff_cc += diff;
 
-	++vcpu->stat.trap_number[TRAP_KVM_HVSOR];
+	++vcpu->stat.trap_number[TRAP_NON_VCPU];
 }
 
 void kvm_arch_sched_out(struct kvm_vcpu *vcpu)
@@ -86,6 +87,7 @@ void kvm_arch_sched_out(struct kvm_vcpu *vcpu)
 
 	if (enable_trap_stats == false)
 		return;
+
 	vcpu->stat.sched_out_cc = kvm_arm_read_cc();
 }
 
@@ -120,7 +122,7 @@ void __init_trap_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.el2_enter_cc = 0;
 	vcpu->stat.el2_exit_cc = 0;
 	vcpu->stat.sched_out_cc = 0;
-	vcpu->stat.sched_in_cc = 0;
+	vcpu->stat.sched_diff_cc = 0;
 
 	for (tmp=0; tmp<TRAP_STAT_NR; tmp++) {
 		vcpu->stat.trap_stat[tmp] = 0;
@@ -645,9 +647,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 		if (enable_trap_stats) {
 			vcpu->stat.el2_enter_cc = kvm_arm_read_cc();
-			vcpu->stat.trap_stat[TRAP_KVM_HVSOR] +=
-				vcpu->stat.sched_in_cc;
-			vcpu->stat.sched_in_cc = 0;
+			vcpu->stat.trap_stat[TRAP_NON_VCPU] +=
+				vcpu->stat.sched_diff_cc;
+			vcpu->stat.sched_diff_cc = 0;
 		}
 
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);

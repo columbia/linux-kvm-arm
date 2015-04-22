@@ -199,7 +199,7 @@ struct kvm_vm_stat {
 #define TRAP_TOTAL 5
 #define TRAP_GUEST 6
 #define TRAP_EL2 7
-#define TRAP_KVM_HVSOR 8
+#define TRAP_NON_VCPU 8
 
 struct kvm_vcpu_stat {
 	u32 halt_successful_poll;
@@ -217,7 +217,7 @@ struct kvm_vcpu_stat {
 	unsigned long el2_enter_cc;
 	/* For scheding Overhead */
 	unsigned long sched_out_cc;
-	unsigned long sched_in_cc;
+	unsigned long sched_diff_cc;
 };
 
 static inline unsigned long kvm_arm_read_cc(void)
