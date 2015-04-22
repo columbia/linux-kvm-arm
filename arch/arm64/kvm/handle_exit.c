@@ -70,6 +70,56 @@ static void print_all_vcpu_trap_stats(struct kvm_vcpu *vcpu)
 static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
+	uint32_t tmp;
+
+	vcpu->stat.prev_trap_type = TRAP_HVC;
+	/*
+	 * Enable cycle counter for Xen - we choose to be compatible but rely
+	 * on running measurement guests under perf on the KVM host.
+	 */
+	if (*vcpu_reg(vcpu, 0) == 0x4b000001) {
+
+		asm volatile(   "mrs %0, PMCR_EL0\n"
+				"orr %0, %0, #1\n"
+				"orr %0, %0, #(1 << 2)\n"
+				"bic %0, %0, #(1 << 3)\n"
+				"msr PMCR_EL0, %0\n"
+				"mov %0, #0b11111\n"
+				"msr PMSELR_EL0, %0\n"
+				"isb \n"
+				"mrs %0, PMXEVTYPER_EL0\n"
+				"orr %0, %0, #(1 << 27)\n"
+				"bic %0, %0, #(3 << 30)\n"
+				"bic %0, %0, #(3 << 28)\n"
+				"msr PMXEVTYPER_EL0, %0\n"
+				"mrs %0, PMCNTENSET_EL0\n"
+				"orr %0, %0, #(1 << 31)\n"
+				"msr PMCNTENSET_EL0, %0\n"
+				: "=r" (tmp));
+		isb();
+
+		return 1;
+	}
+
+	/* NOOP hvc call to measure hypercall turn-around time */
+	if (*vcpu_reg(vcpu, 0) == 0x4b000000) {
+		return 1;
+	}
+	/* Trap stat enable */
+	if (*vcpu_reg(vcpu, 0) == 0x10000) {
+		init_trap_stats(vcpu);
+		isb();
+		enable_trap_stats = true;
+		return 1;
+	}
+
+	/* Trap stat disable & print out stats */
+	if (*vcpu_reg(vcpu, 0) == 0x11000) {
+		enable_trap_stats = false;
+		isb();
+		print_all_vcpu_trap_stats(vcpu);
+		return 1;
+	}
 
 	trace_kvm_hvc_arm64(*vcpu_pc(vcpu), *vcpu_reg(vcpu, 0),
 			    kvm_vcpu_hvc_get_imm(vcpu));

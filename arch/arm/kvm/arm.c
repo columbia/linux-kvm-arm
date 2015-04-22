@@ -77,6 +77,7 @@ void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 		diff = tmp - vcpu->stat.sched_out_cc;
 	else
 		diff = 0;
+
 	vcpu->stat.sched_diff_cc += diff;
 
 	++vcpu->stat.trap_number[TRAP_NON_VCPU];
@@ -121,7 +122,7 @@ void __init_trap_stats(struct kvm_vcpu *vcpu)
 	//vcpu->stat.ent_trap_cc = 0;
 	vcpu->stat.el2_enter_cc = 0;
 	vcpu->stat.el2_exit_cc = 0;
-	vcpu->stat.sched_out_cc = 0;
+	vcpu->stat.sched_out_cc = -1;
 	vcpu->stat.sched_diff_cc = 0;
 
 	for (tmp=0; tmp<TRAP_STAT_NR; tmp++) {
@@ -645,7 +646,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		__kvm_guest_enter();
 		vcpu->mode = IN_GUEST_MODE;
 
-		if (enable_trap_stats) {
+		if (enable_trap_stats == true) {
 			vcpu->stat.el2_enter_cc = kvm_arm_read_cc();
 			vcpu->stat.trap_stat[TRAP_NON_VCPU] +=
 				vcpu->stat.sched_diff_cc;
@@ -658,7 +659,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		/*
 		 * Back from guest
 		 *************************************************************/
-		if (enable_trap_stats) {
+		if (enable_trap_stats == true) {
 			vcpu->stat.el2_exit_cc = kvm_arm_read_cc();
 			update_trap_stats(vcpu);
 		}
