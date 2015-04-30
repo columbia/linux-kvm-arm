@@ -965,6 +965,9 @@ el1_sync:					// Guest trapped into EL2
 	push	x0, x1
 	push	x2, x3
 
+	read_ccounter x2
+	push	x1, x2
+
 	mrs	x1, esr_el2
 	lsr	x2, x1, #ESR_ELx_EC_SHIFT
 
@@ -975,6 +978,7 @@ el1_sync:					// Guest trapped into EL2
 	cbnz	x3, el1_trap			// called HVC
 
 	/* Here, we're pretty sure the host called HVC. */
+	add	sp, sp, #16
 	pop	x2, x3
 	pop	x0, x1
 
@@ -1055,6 +1059,9 @@ el1_trap:
 	str	w1, [x0, #VCPU_ESR_EL2]
 	str	x2, [x0, #VCPU_FAR_EL2]
 	str	x3, [x0, #VCPU_HPFAR_EL2]
+
+	pop	x1, x2
+	str     x2, [x0, #VCPU_ENT_TRAP_CC]
 
 	mov	x1, #ARM_EXCEPTION_TRAP
 	b	__kvm_vcpu_return

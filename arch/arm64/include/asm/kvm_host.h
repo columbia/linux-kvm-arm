@@ -190,7 +190,7 @@ struct kvm_vm_stat {
 	u32 remote_tlb_flush;
 };
 
-#define TRAP_STAT_NR 9
+#define TRAP_STAT_NR 9 
 #define TRAP_HVC 0
 #define TRAP_WFX 1
 #define TRAP_IO_KERNEL 2
@@ -218,6 +218,9 @@ struct kvm_vcpu_stat {
 	/* For scheding Overhead */
 	unsigned long sched_out_cc;
 	unsigned long sched_diff_cc;
+	/* Pre handle_exit */
+	unsigned long hvsr_top_cc;
+	unsigned long hvsr_bot_cc;
 };
 
 static inline unsigned long kvm_arm_read_cc(void)
