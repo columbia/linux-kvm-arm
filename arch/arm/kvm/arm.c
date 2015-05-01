@@ -704,6 +704,10 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		preempt_enable();
 
 		if (enable_trap_stats == true) {
+		 /* Back from guest
+		 *************************************************************/
+			kvm_timer_sync_hwstate(vcpu);
+			kvm_vgic_sync_hwstate(vcpu);
 			vcpu->stat.hvsr_top_cc += kvm_arm_read_cc() -
 				vcpu->stat.ent_trap_cc;
 			vcpu->stat.hvsr_top_cc -= vcpu->stat.sched_diff_cc;
