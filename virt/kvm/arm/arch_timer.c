@@ -261,7 +261,8 @@ int kvm_arm_timer_set_reg(struct kvm_vcpu *vcpu, u64 regid, u64 value)
 		timer->cntv_ctl = value;
 		break;
 	case KVM_REG_ARM_TIMER_CNT:
-		vcpu->kvm->arch.timer.cntvoff = kvm_phys_timer_read() - value;
+		//vcpu->kvm->arch.timer.cntvoff = kvm_phys_timer_read() - value;
+		vcpu->kvm->arch.timer.cntvoff = 0;
 		break;
 	case KVM_REG_ARM_TIMER_CVAL:
 		timer->cntv_cval = value;
@@ -398,5 +399,6 @@ void kvm_timer_enable(struct kvm *kvm)
 
 void kvm_timer_init(struct kvm *kvm)
 {
-	kvm->arch.timer.cntvoff = kvm_phys_timer_read();
+	//kvm->arch.timer.cntvoff = kvm_phys_timer_read();
+	kvm->arch.timer.cntvoff = 0;
 }

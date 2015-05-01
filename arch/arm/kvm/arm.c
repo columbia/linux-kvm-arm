@@ -699,10 +699,11 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 		preempt_enable();
 
-		if ((enable_trap_stats == true) && vcpu->stat.el2_exit_cc)
+		if (enable_trap_stats == true) {
 			vcpu->stat.hvsr_top_cc += kvm_arm_read_cc() -
-				vcpu->stat.el2_exit_cc;
+				vcpu->stat.ent_trap_cc;
 			vcpu->stat.hvsr_top_cc -= vcpu->stat.sched_diff_cc;
+		}
 		ret = handle_exit(vcpu, run, ret);
 		/*if (enable_trap_stats == true) 
 			tmp_cc = kvm_arm_read_cc();*/
