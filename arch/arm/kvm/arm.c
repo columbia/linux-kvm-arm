@@ -127,6 +127,8 @@ void __init_trap_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.sched_diff_cc = 0;
 	vcpu->stat.hvsr_top_cc = 0;
 	vcpu->stat.hvsr_bot_cc = 0;
+	vcpu->stat.hvsr_back_cc = 0;
+	vcpu->stat.hvsr_back_diff_cc = 0;
 
 	for (tmp=0; tmp<TRAP_STAT_NR; tmp++) {
 		vcpu->stat.trap_stat[tmp] = 0;
@@ -577,7 +579,6 @@ static int kvm_vcpu_initialized(struct kvm_vcpu *vcpu)
 int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
-	unsigned long tmp_cc;
 	sigset_t sigsaved;
 
 	if (unlikely(!kvm_vcpu_initialized(vcpu)))
@@ -651,8 +652,6 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		vcpu->mode = IN_GUEST_MODE;
 
 		if (enable_trap_stats == true) {
-			/*if (tmp_cc)
-				vcpu->stat.hvsr_bot_cc += kvm_arm_read_cc() - tmp_cc;*/
 			vcpu->stat.el2_enter_cc = kvm_arm_read_cc();
 			vcpu->stat.trap_stat[TRAP_NON_VCPU] +=
 				vcpu->stat.sched_diff_cc;
@@ -666,6 +665,8 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 * Back from guest
 		 *************************************************************/
 		if (enable_trap_stats == true) {
+			vcpu->stat.hvsr_back_diff_cc = vcpu->stat.last_enter_cc - vcpu->stat.hvsr_back_diff_cc;
+			vcpu->stat.hvsr_back_cc += vcpu->stat.hvsr_back_diff_cc;
 			vcpu->stat.el2_exit_cc = kvm_arm_read_cc();
 			update_trap_stats(vcpu);
 		}
@@ -705,8 +706,11 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 			vcpu->stat.hvsr_top_cc -= vcpu->stat.sched_diff_cc;
 		}
 		ret = handle_exit(vcpu, run, ret);
-		/*if (enable_trap_stats == true) 
-			tmp_cc = kvm_arm_read_cc();*/
+		//local_irq_disable();
+		if (enable_trap_stats == true ) {
+			//printk("Back enable\n");
+			vcpu->stat.hvsr_back_diff_cc = kvm_arm_read_cc();
+		}
 	}
 
 	if (vcpu->sigset_active)
