@@ -665,8 +665,11 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 * Back from guest
 		 *************************************************************/
 		if (enable_trap_stats == true) {
-			vcpu->stat.hvsr_back_diff_cc = vcpu->stat.last_enter_cc - vcpu->stat.hvsr_back_diff_cc;
-			vcpu->stat.hvsr_back_cc += vcpu->stat.hvsr_back_diff_cc;
+			if (vcpu->stat.hvsr_back_diff_cc != 0) {
+				vcpu->stat.hvsr_back_diff_cc = vcpu->stat.last_enter_cc
+						- vcpu->stat.hvsr_back_diff_cc;
+				vcpu->stat.hvsr_back_cc += vcpu->stat.hvsr_back_diff_cc;
+			}
 			vcpu->stat.el2_exit_cc = kvm_arm_read_cc();
 			update_trap_stats(vcpu);
 		}
@@ -709,7 +712,10 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		//local_irq_disable();
 		if (enable_trap_stats == true ) {
 			//printk("Back enable\n");
-			vcpu->stat.hvsr_back_diff_cc = kvm_arm_read_cc();
+			if (ret == ARM_EXCEPTION_IRQ)
+				vcpu->stat.hvsr_back_diff_cc = 0;
+			else
+				vcpu->stat.hvsr_back_diff_cc = kvm_arm_read_cc();
 		}
 	}
 
