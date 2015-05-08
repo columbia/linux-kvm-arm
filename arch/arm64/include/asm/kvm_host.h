@@ -221,9 +221,11 @@ struct kvm_vcpu_stat {
 	/* Pre handle_exit */
 	unsigned long hvsr_top_cc;
 	unsigned long hvsr_bot_cc;
-
+	/* Post handle_exit */
 	unsigned long hvsr_back_cc;
 	unsigned long hvsr_back_diff_cc;
+	unsigned long hvsr_back_sched_on;
+	unsigned long hvsr_back_sched_diff;
 };
 
 static inline unsigned long kvm_arm_read_cc(void)

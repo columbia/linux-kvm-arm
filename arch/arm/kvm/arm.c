@@ -79,6 +79,8 @@ void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 		diff = 0;
 
 	vcpu->stat.sched_diff_cc += diff;
+	if (vcpu->stat.hvsr_back_sched_on)
+		vcpu->stat.hvsr_back_sched_diff += diff;
 
 	++vcpu->stat.trap_number[TRAP_NON_VCPU];
 }
@@ -129,6 +131,8 @@ void __init_trap_stats(struct kvm_vcpu *vcpu)
 	vcpu->stat.hvsr_bot_cc = 0;
 	vcpu->stat.hvsr_back_cc = 0;
 	vcpu->stat.hvsr_back_diff_cc = 0;
+	vcpu->stat.hvsr_back_sched_on = 0;
+	vcpu->stat.hvsr_back_sched_diff = 0;
 
 	for (tmp=0; tmp<TRAP_STAT_NR; tmp++) {
 		vcpu->stat.trap_stat[tmp] = 0;
@@ -580,6 +584,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
 	sigset_t sigsaved;
+	unsigned long back_diff_cc;
 
 	if (unlikely(!kvm_vcpu_initialized(vcpu)))
 		return -ENOEXEC;
@@ -656,6 +661,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 			vcpu->stat.trap_stat[TRAP_NON_VCPU] +=
 				vcpu->stat.sched_diff_cc;
 			vcpu->stat.sched_diff_cc = 0;
+			vcpu->stat.hvsr_back_sched_on = 0;
 		}
 
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
@@ -666,9 +672,11 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 *************************************************************/
 		if (enable_trap_stats == true) {
 			if (vcpu->stat.hvsr_back_diff_cc != 0) {
-				vcpu->stat.hvsr_back_diff_cc = vcpu->stat.last_enter_cc
+				back_diff_cc = vcpu->stat.last_enter_cc
 						- vcpu->stat.hvsr_back_diff_cc;
-				vcpu->stat.hvsr_back_cc += vcpu->stat.hvsr_back_diff_cc;
+				back_diff_cc -= vcpu->stat.hvsr_back_sched_diff;
+				vcpu->stat.hvsr_back_cc += back_diff_cc;
+				vcpu->stat.hvsr_back_sched_diff = 0;
 			}
 			vcpu->stat.el2_exit_cc = kvm_arm_read_cc();
 			update_trap_stats(vcpu);
@@ -713,13 +721,13 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 			vcpu->stat.hvsr_top_cc -= vcpu->stat.sched_diff_cc;
 		}
 		ret = handle_exit(vcpu, run, ret);
-		//local_irq_disable();
 		if (enable_trap_stats == true ) {
-			//printk("Back enable\n");
-			if (ret == ARM_EXCEPTION_IRQ)
+			if (ret == ARM_EXCEPTION_IRQ || ret <= 0)
 				vcpu->stat.hvsr_back_diff_cc = 0;
-			else
+			else {
 				vcpu->stat.hvsr_back_diff_cc = kvm_arm_read_cc();
+				vcpu->stat.hvsr_back_sched_on = 1;
+			}
 		}
 	}
 
