@@ -583,6 +583,7 @@ static int kvm_vcpu_initialized(struct kvm_vcpu *vcpu)
 int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
+	int ret_el2;
 	sigset_t sigsaved;
 	unsigned long back_diff_cc;
 
@@ -605,6 +606,10 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	ret = 1;
 	run->exit_reason = KVM_EXIT_UNKNOWN;
 	while (ret > 0) {
+		if (enable_trap_stats == true && (vcpu->stat.hvsr_back_diff_cc == -1)) {
+			vcpu->stat.hvsr_back_diff_cc = kvm_arm_read_cc();
+			vcpu->stat.hvsr_back_sched_on = 1;
+		}
 		/*
 		 * Check conditions before entering the guest
 		 */
@@ -710,24 +715,17 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		kvm_vgic_sync_hwstate(vcpu);
 
 		preempt_enable();
-
-		if (enable_trap_stats == true) {
-		 /* Back from guest
-		 *************************************************************/
-			kvm_timer_sync_hwstate(vcpu);
-			kvm_vgic_sync_hwstate(vcpu);
+		if (enable_trap_stats == true && (ret != ARM_EXCEPTION_IRQ)) {
 			vcpu->stat.hvsr_top_cc += kvm_arm_read_cc() -
 				vcpu->stat.ent_trap_cc;
 			vcpu->stat.hvsr_top_cc -= vcpu->stat.sched_diff_cc;
 		}
 		ret = handle_exit(vcpu, run, ret);
-		if (enable_trap_stats == true ) {
-			if (ret == ARM_EXCEPTION_IRQ || ret <= 0)
+		if (enable_trap_stats == true) {
+			if (ret_el2 == ARM_EXCEPTION_IRQ)
 				vcpu->stat.hvsr_back_diff_cc = 0;
-			else {
-				vcpu->stat.hvsr_back_diff_cc = kvm_arm_read_cc();
-				vcpu->stat.hvsr_back_sched_on = 1;
-			}
+			else
+				vcpu->stat.hvsr_back_diff_cc = -1;
 		}
 	}
 

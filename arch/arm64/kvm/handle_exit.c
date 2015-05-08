@@ -56,7 +56,7 @@ static void print_vcpu_trap_stats(struct kvm_vcpu *vcpu)
 				trap_stat_names[i],
 				vcpu->stat.trap_stat[i],
 				vcpu->stat.trap_number[i]);
-	printk("HVSR_TOP %lu\n", vcpu->stat.hvsr_top_cc);
+	printk("TRAP IN %lu\n", vcpu->stat.hvsr_top_cc);
 	printk("TRAP BACK %lu\n", vcpu->stat.hvsr_back_cc);
 }
 
