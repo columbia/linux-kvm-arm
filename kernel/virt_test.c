@@ -383,7 +383,7 @@ static unsigned long el2_exit_bot(void)
 			"hvc #0\n\t"
 			"mov %[cc], x0\n\t":
 			[cc] "=r" (cc)::
-			"x0");
+			"x0", "x1");
 	local_irq_restore(flags);
 
 	return cc;
