@@ -63,6 +63,30 @@ static DEFINE_SPINLOCK(kvm_vmid_lock);
 
 bool enable_trap_stats = false;
 
+void kvm_arch_el2_exit_top(struct kvm_vcpu *vcpu)
+{
+	u32 hsr = kvm_vcpu_get_hsr(vcpu);
+        u8 hsr_ec = hsr >> ESR_ELx_EC_SHIFT;
+	unsigned long ret_cc;
+
+	if ((hsr_ec == ESR_ELx_EC_HVC64) && (*vcpu_reg(vcpu, 0) == 0x20000)) {
+		ret_cc = kvm_arm_read_cc() -
+			vcpu->stat.ent_trap_cc;
+		vcpu->stat.hvsr_top_cc = ret_cc - vcpu->stat.sched_diff_cc;
+	}
+}
+
+void kvm_arch_el2_exit_bot(struct kvm_vcpu *vcpu)
+{
+	u32 hsr = kvm_vcpu_get_hsr(vcpu);
+        u8 hsr_ec = hsr >> ESR_ELx_EC_SHIFT;
+
+	if ((hsr_ec == ESR_ELx_EC_HVC64) && (*vcpu_reg(vcpu, 0) == 0x30000)) {
+		vcpu->stat.hvsr_bot_cc = kvm_arm_read_cc();
+		vcpu->stat.ent_trap_cc = 0x30000;
+	}
+}
+
 void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 {
 	unsigned long tmp;
@@ -610,6 +634,11 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 			vcpu->stat.hvsr_back_diff_cc = kvm_arm_read_cc();
 			vcpu->stat.hvsr_back_sched_on = 1;
 		}
+
+#ifdef KVM_MICRO_MEASURE
+		/* Measure handle exit to el2 cost*/
+		kvm_arch_el2_exit_bot(vcpu);
+#endif
 		/*
 		 * Check conditions before entering the guest
 		 */
@@ -714,7 +743,12 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 		kvm_vgic_sync_hwstate(vcpu);
 
-		preempt_enable();
+		/* Measure el2 to handle exit cost*/
+		ret_el2 = ret;
+#ifdef KVM_MICRO_MEASURE
+		kvm_arch_el2_exit_top(vcpu);
+#endif
+
 		if (enable_trap_stats == true && (ret != ARM_EXCEPTION_IRQ)) {
 			vcpu->stat.hvsr_top_cc += kvm_arm_read_cc() -
 				vcpu->stat.ent_trap_cc;

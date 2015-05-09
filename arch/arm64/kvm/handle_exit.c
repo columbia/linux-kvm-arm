@@ -106,7 +106,13 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	/* NOOP hvc call to measure hypercall turn-around time */
 	if (*vcpu_reg(vcpu, 0) == 0x4b000000) {
 		return 1;
+	} else if (*vcpu_reg(vcpu, 0) == 0x20000) {
+		*vcpu_reg(vcpu, 0) = vcpu->stat.hvsr_top_cc;
+		return 1;
+	} else if (*vcpu_reg(vcpu, 0) == 0x30000) {
+		return 1;
 	}
+
 	/* Trap stat enable */
 	if (*vcpu_reg(vcpu, 0) == 0x10000) {
 		init_trap_stats(vcpu);

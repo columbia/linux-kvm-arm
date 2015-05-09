@@ -178,10 +178,25 @@
 	// x19-x29, lr, sp*, elr*, spsr*
 	restore_common_regs
 
+	read_ccounter x2
+	str     x2, [x0, #VCPU_LAST_ENTER_CC]
+	ldr     x1, [x0, #VCPU_ENT_TRAP_CC]
+#ifdef KVM_MICRO_MEASURE
+	cmp	x1, #0x30000
+	bne	skip_micro
+	ldr	x1, [x0, #VCPU_HVSR_BOT_CC]
+	sub	x0, x2, x1
+	pop	x2, x3
+	add	sp, sp, #16
+	b	done
+skip_micro:
+#endif
+	sub     x2, x2, x1
+	str     x2, [x0, #VCPU_PREV_TRAP_CC]
 	// Last bits of the 64bit state
 	pop	x2, x3
 	pop	x0, x1
-
+done:
 	// Do not touch any register after this!
 .endm
 
