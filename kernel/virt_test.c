@@ -314,7 +314,7 @@ static unsigned long vmswitch_send_test(void)
 	cc_before = read_cc();
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
 	if (ret)
-		kvm_err("Sending HVC VM switch measure error: %d\n", ret);
+		kvm_err("Sending HVC VM switch measure error: %lu\n", ret);
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -358,6 +358,37 @@ static unsigned long trap_profile_end(void)
 	return ret;
 }
 
+static unsigned long el2_exit_top(void)
+{
+	unsigned long cc, flags;
+
+	local_irq_save(flags);
+	asm volatile(
+			"mov x0, #0x20000\n\t"
+			"hvc #0\n\t"
+			"mov %[cc], x0\n\t":
+			[cc] "=r" (cc)::
+			"x0");
+	local_irq_restore(flags);
+	return cc;
+}
+
+static unsigned long el2_exit_bot(void)
+{
+	unsigned long cc, flags;
+
+	local_irq_save(flags);
+	asm volatile(
+			"mov x0, #0x30000\n\t"
+			"hvc #0\n\t"
+			"mov %[cc], x0\n\t":
+			[cc] "=r" (cc)::
+			"x0");
+	local_irq_restore(flags);
+
+	return cc;
+}
+
 struct virt_test available_tests[] = {
 	{ "hvc",		hvc_test	},
 	{ "mmio_read_user",	mmio_user	},
@@ -371,6 +402,8 @@ struct virt_test available_tests[] = {
 	{ "vmswitch_recv",	vmswitch_recv_test	},
 	{ "trap-profile-start", trap_profile_start      },
 	{ "trap-profile-end",   trap_profile_end        },
+	{ "el2-exit-top",	el2_exit_top	        },
+	{ "el2-exit-bot",	el2_exit_bot	        },
 };
 
 static int init_mmio_test(void)
