@@ -234,7 +234,8 @@ static inline unsigned long kvm_arm_read_cc(void)
 
         asm volatile(
                 "isb\n"
-                "mrs %0, cntvct_el0\n"
+                //"mrs %0, cntvct_el0\n"
+                "mrs %0, CNTPCT_EL0\n"
                 "isb\n"
                 : [reg] "=r" (cc));
         return cc;

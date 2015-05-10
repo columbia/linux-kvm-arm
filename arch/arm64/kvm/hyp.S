@@ -42,7 +42,8 @@
 .macro read_ccounter reg
 	isb
 	#mrs \reg, PMCCNTR_EL0
-	mrs \reg, cntvct_el0
+	#mrs \reg, cntvct_el0
+	mrs \reg, CNTPCT_EL0
 	isb
 .endm
 
