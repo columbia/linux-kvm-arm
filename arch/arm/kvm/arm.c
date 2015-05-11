@@ -146,7 +146,7 @@ void __init_trap_stats(struct kvm_vcpu *vcpu)
 
 	vcpu->stat.prev_trap_type = -1;
 	//vcpu->stat.prev_trap_cc = 0;
-	//vcpu->stat.ent_trap_cc = 0;
+	vcpu->stat.ent_trap_cc = kvm_arm_read_cc();
 	vcpu->stat.el2_enter_cc = 0;
 	vcpu->stat.el2_exit_cc = 0;
 	vcpu->stat.sched_out_cc = -1;
