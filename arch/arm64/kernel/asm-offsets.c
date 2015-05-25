@@ -152,6 +152,11 @@ int main(void)
   DEFINE(VGIC_CPU_NR_LR,	offsetof(struct vgic_cpu, nr_lr));
   DEFINE(KVM_VTTBR,		offsetof(struct kvm, arch.vttbr));
   DEFINE(KVM_VGIC_VCTRL,	offsetof(struct kvm, arch.vgic.vctrl_base));
+
+  DEFINE(VCPU_NEW_EDATA,    	offsetof(struct kvm_vcpu, stat.exit_stats.new_edata));
+  DEFINE(VCPU_PREV_EDATA,    	offsetof(struct kvm_vcpu, stat.exit_stats.prev_edata));
+  DEFINE(EDATA_EXIT_EL2,    	offsetof(struct kvm_exit_data, exit_el2));
+  DEFINE(EDATA_ENTRY_EL2,    	offsetof(struct kvm_exit_data, entry_el2));
 #endif
 #ifdef CONFIG_CPU_PM
   DEFINE(CPU_SUSPEND_SZ,	sizeof(struct cpu_suspend_ctx));

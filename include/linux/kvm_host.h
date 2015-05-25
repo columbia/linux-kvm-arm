@@ -641,6 +641,9 @@ void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu);
 
 void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu);
 
+void kvm_arch_notify_irq_start(void);
+void kvm_arch_notify_irq_end(void);
+
 void kvm_arch_vcpu_free(struct kvm_vcpu *vcpu);
 void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu);
 void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu);

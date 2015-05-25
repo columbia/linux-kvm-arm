@@ -29,6 +29,7 @@
 #include <linux/reboot.h>
 #include <linux/debugfs.h>
 #include <linux/highmem.h>
+#include <linux/interrupt.h>
 #include <linux/file.h>
 #include <linux/syscore_ops.h>
 #include <linux/cpu.h>
@@ -3286,7 +3287,20 @@ static void kvm_sched_out(struct preempt_notifier *pn,
 
 	if (current->state == TASK_RUNNING)
 		vcpu->preempted = true;
+
+	kvm_arch_sched_out(vcpu);
+
 	kvm_arch_vcpu_put(vcpu);
+}
+
+void kvm_notify_irq_start(void)
+{
+	kvm_arch_notify_irq_start();
+}
+
+void kvm_notify_irq_end(void)
+{
+	kvm_arch_notify_irq_end();
 }
 
 int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
@@ -3360,6 +3374,8 @@ int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 
 	kvm_preempt_ops.sched_in = kvm_sched_in;
 	kvm_preempt_ops.sched_out = kvm_sched_out;
+
+	set_irq_notifiers(kvm_notify_irq_start, kvm_notify_irq_end);
 
 	r = kvm_init_debug();
 	if (r) {

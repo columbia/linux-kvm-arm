@@ -163,9 +163,109 @@ struct kvm_vm_stat {
 	u32 remote_tlb_flush;
 };
 
+/* Various defines for the exit trap framework - BEGIN */
+
+enum trap_reason {
+	TRAP_HVC = 0,
+	TRAP_WFE,
+	TRAP_WFI,
+	TRAP_IO_KERNEL,
+	TRAP_IO_USER,
+	TRAP_IRQ,
+	TRAP_MAX /* For array sizing */
+};
+
+static inline unsigned long kvm_arm_read_pcounter(void)
+{
+	unsigned long val;
+
+	asm volatile(
+		"isb\n"
+		"mrs %0, CNTPCT_EL0\n"
+		"isb\n"
+		: [reg] "=r" (val));
+	return val;
+}
+
+extern void kvm_init_trap_stats(void);
+extern void kvm_vcpu_init_trap_stats(struct kvm_vcpu *vcpu);
+extern void kvm_trap_stat_set_exit_reason(struct kvm_vcpu *vcpu,
+					  int exit_reason);
+extern void kvm_stat_new_loop(struct kvm_vcpu *vcpu);
+extern void kvm_stat_enter_guest(struct kvm_vcpu *vcpu);
+extern void kvm_stat_exit_guest(struct kvm_vcpu *vcpu);
+extern void kvm_stat_handle_exit_begin(struct kvm_vcpu *vcpu);
+extern void kvm_stat_handle_exit_end(struct kvm_vcpu *vcpu);
+
+struct kvm_exit_data {
+	enum trap_reason trap_reason;
+
+	/* Chronological data points for an exit */
+
+	unsigned long exit_el2;		/* just trapped from guest */
+	unsigned long exit_el1;		/* just trapped from el2 */
+
+	/* Adjustments for IRQs happening */
+	unsigned long el1_irq_start;	/* holding variable, DNR */
+	unsigned long el1_irq_time;
+	unsigned long el1_irq_no_handle_exit_time; /* to calc switch time */
+	unsigned long el1_irq_nr;
+
+	/* Adjustments for scheding Overhead */
+	unsigned long sched_out_start;	/* holding variable, DNR */
+	unsigned long sched_out_time;
+	unsigned long sched_out_nr;
+
+	unsigned long exit_el1_handle_exit;  /* reached handle_exit */
+
+	unsigned long entry_el1_loop_start;  /* start of run loop */
+	unsigned long entry_el1;	     /* about to trap to el2 */
+	unsigned long entry_el2;	     /* about to trap to guest */
+};
+
+struct kvm_exit_stats {
+	unsigned long trap_exit_time[TRAP_MAX]; /* time spent */
+	unsigned long trap_exit_nr[TRAP_MAX];   /* number of times seen */
+	unsigned long trap_exit_time_in_kvm[TRAP_MAX]; /* time - (irq+sched) */
+	unsigned long total_el2;
+	unsigned long total_guest;
+	unsigned long switch_time; /* exit -> handle_exit -> loop -> entry */
+	unsigned long switch_time_in_kvm; /* less irq + sched */
+
+	unsigned long total_irq_time;
+	unsigned long total_irq_nr;
+
+	unsigned long total_sched_out_time;
+	unsigned long total_sched_out_nr;
+
+	unsigned long reset_time;
+
+	/*
+	 * We want to measure the full time spent outside of the VCPU and
+	 * attribute this to the individual exit reasons, but we don't have
+	 * the full information before we exited, and re-entered the CPU and
+	 * we cannot report the data in the middle of EL2.
+	 *
+	 * Therefore, we keep two versions of the exit data around and store
+	 * data points on the new_edata pointer and switch new with prev when
+	 * we have all the observations and are about to enter the guest,
+	 * leaving us with a fresh new copy for new_edata.
+	 */
+	struct kvm_exit_data edata1;
+	struct kvm_exit_data edata2;
+	struct kvm_exit_data *new_edata;
+	struct kvm_exit_data *prev_edata;
+
+	bool in_handle_exit;
+};
+
+/* Various defines for the exit trap framework - ENDIT */
+
 struct kvm_vcpu_stat {
 	u32 halt_successful_poll;
 	u32 halt_wakeup;
+
+	struct kvm_exit_stats exit_stats;
 };
 
 int kvm_vcpu_preferred_target(struct kvm_vcpu_init *init);
@@ -248,6 +348,8 @@ static inline void kvm_arch_hardware_disable(void) {}
 static inline void kvm_arch_hardware_unsetup(void) {}
 static inline void kvm_arch_sync_events(struct kvm *kvm) {}
 static inline void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu) {}
-static inline void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu) {}
+
+extern void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu);
+extern void kvm_arch_sched_out(struct kvm_vcpu *vcpu);
 
 #endif /* __ARM64_KVM_HOST_H__ */
