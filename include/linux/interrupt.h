@@ -657,4 +657,6 @@ extern int early_irq_init(void);
 extern int arch_probe_nr_irqs(void);
 extern int arch_early_irq_init(void);
 
+extern void set_irq_notifiers(void (*start)(void), void (*end)(void));
+
 #endif

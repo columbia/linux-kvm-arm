@@ -279,6 +279,9 @@ int kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	/* Set up the timer */
 	kvm_timer_vcpu_init(vcpu);
 
+	/* Initialize the trap statistics */
+	kvm_vcpu_init_trap_stats(vcpu);
+
 	return 0;
 }
 
@@ -519,6 +522,8 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	ret = 1;
 	run->exit_reason = KVM_EXIT_UNKNOWN;
 	while (ret > 0) {
+		kvm_stat_new_loop(vcpu);
+
 		/*
 		 * Check conditions before entering the guest
 		 */
@@ -556,7 +561,11 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		kvm_guest_enter();
 		vcpu->mode = IN_GUEST_MODE;
 
+		kvm_stat_enter_guest(vcpu);
+
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
+
+		kvm_stat_exit_guest(vcpu);
 
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		kvm_guest_exit();
@@ -1149,6 +1158,9 @@ void kvm_arch_exit(void)
 static int arm_init(void)
 {
 	int rc = kvm_init(NULL, sizeof(struct kvm_vcpu), 0, THIS_MODULE);
+	if (!rc)
+		kvm_init_trap_stats();
+
 	return rc;
 }
 

@@ -37,6 +37,12 @@
 	.pushsection	.hyp.text, "ax"
 	.align	PAGE_SHIFT
 
+.macro read_pcounter reg
+	isb
+	mrs \reg, CNTPCT_EL0
+	isb
+.endm
+
 .macro save_common_regs
 	// x2: base address for cpu context
 	// x3: tmp register
@@ -168,6 +174,17 @@
 
 	// x19-x29, lr, sp*, elr*, spsr*
 	restore_common_regs
+
+	read_pcounter x2
+	ldr	x1, [x0, #VCPU_NEW_EDATA]
+	kern_hyp_va x1
+	str     x2, [x1, #EDATA_ENTRY_EL2]
+
+	// We are done with an obervation, switch new and prev edata pointers
+	ldr	x2, [x0, #VCPU_PREV_EDATA] // prev = s->prev_edata
+	ldr	x1, [x0, #VCPU_NEW_EDATA] // new = s->new_edata
+	str	x1, [x0, #VCPU_PREV_EDATA] // s->prev_edata = new
+	str	x2, [x0, #VCPU_NEW_EDATA]  // s->new_edata = prev
 
 	// Last bits of the 64bit state
 	pop	x2, x3
@@ -1163,6 +1180,9 @@ el1_sync:					// Guest trapped into EL2
 	push	x0, x1
 	push	x2, x3
 
+	read_pcounter x2
+	push	x1, x2
+
 	mrs	x1, esr_el2
 	lsr	x2, x1, #ESR_ELx_EC_SHIFT
 
@@ -1173,6 +1193,7 @@ el1_sync:					// Guest trapped into EL2
 	cbnz	x3, el1_trap			// called HVC
 
 	/* Here, we're pretty sure the host called HVC. */
+	add	sp, sp, #16			// Ignore read_pcounter
 	pop	x2, x3
 	pop	x0, x1
 
@@ -1249,6 +1270,12 @@ el1_trap:
 	str	x2, [x0, #VCPU_FAR_EL2]
 	str	x3, [x0, #VCPU_HPFAR_EL2]
 
+	/* Store the read_pcounter result */
+	pop	x1, x2
+	ldr	x1, [x0, #VCPU_NEW_EDATA]
+	kern_hyp_va x1
+	str     x2, [x1, #EDATA_EXIT_EL2]
+
 	mov	x1, #ARM_EXCEPTION_TRAP
 	b	__kvm_vcpu_return
 
@@ -1266,6 +1293,10 @@ el1_irq:
 	push	x0, x1
 	push	x2, x3
 	mrs	x0, tpidr_el2
+	read_pcounter x2
+	ldr	x1, [x0, #VCPU_NEW_EDATA]
+	kern_hyp_va x1
+	str     x2, [x1, #EDATA_EXIT_EL2]
 	mov	x1, #ARM_EXCEPTION_IRQ
 	b	__kvm_vcpu_return
 
