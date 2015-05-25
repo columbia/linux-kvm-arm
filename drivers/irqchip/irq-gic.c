@@ -326,11 +326,38 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 }
 #endif
 
+#ifdef CONFIG_PM
+static int gic_set_wake(struct irq_data *d, unsigned int on)
+{
+	int ret = -ENXIO;
+
+	if (gic_arch_extn.irq_set_wake)
+		ret = gic_arch_extn.irq_set_wake(d, on);
+
+	return ret;
+}
+
+#else
+#define gic_set_wake	NULL
+#endif
+
+static void (*notify_irq_start)(void) = NULL;
+static void (*notify_irq_end)(void) = NULL;
+
+void set_irq_notifiers(void (*start)(void), void (*end)(void))
+{
+	notify_irq_start = start;
+	notify_irq_end = end;
+}
+
 static void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
 {
 	u32 irqstat, irqnr;
 	struct gic_chip_data *gic = &gic_data[0];
 	void __iomem *cpu_base = gic_data_cpu_base(gic);
+
+	if (notify_irq_start)
+		notify_irq_start();
 
 	do {
 		irqstat = readl_relaxed(cpu_base + GIC_CPU_INTACK);
@@ -353,6 +380,9 @@ static void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
 		}
 		break;
 	} while (1);
+
+	if (notify_irq_end)
+		notify_irq_end();
 }
 
 static void gic_handle_cascade_irq(struct irq_desc *desc)
