@@ -70,6 +70,7 @@ void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)
 
 	now = kvm_arm_read_pcounter();
 	new->sched_out_time += (now - new->sched_out_start);
+	new->sched_out_start = 0;
 }
 
 void kvm_arch_sched_out(struct kvm_vcpu *vcpu)
@@ -202,6 +203,46 @@ void kvm_vcpu_init_trap_stats(struct kvm_vcpu *vcpu)
 	estats->reset_time = kvm_arm_read_pcounter();
 }
 
+#define cutoff(x) x = max(x, now)
+void kvm_vcpu_reset_trap_stats(struct kvm_vcpu *vcpu)
+{
+	struct kvm_exit_stats *estats = &vcpu->stat.exit_stats;
+	struct kvm_exit_data *prev = estats->prev_edata;
+	struct kvm_exit_data *new = estats->new_edata;
+	unsigned long now = kvm_arm_read_pcounter();
+
+	memset(estats->trap_exit_time, 0, sizeof(unsigned long) * TRAP_MAX);
+	memset(estats->trap_exit_nr, 0, sizeof(unsigned long) * TRAP_MAX);
+	memset(estats->trap_exit_time_in_kvm, 0, sizeof(unsigned long) * TRAP_MAX);
+	estats->total_el2 = 0;
+	estats->total_guest = 0;
+	estats->switch_time = 0;
+	estats->switch_time_in_kvm = 0;
+	estats->total_irq_time = 0;
+	estats->total_irq_nr = 0;
+	estats->total_sched_out_time = 0;
+	estats->total_sched_out_nr = 0;
+
+	memset(prev, 0, sizeof(*prev));
+
+	/* Adjust any data from current observation before the reset time */
+	cutoff(new->exit_el2);
+	cutoff(new->exit_el1);
+	cutoff(new->el1_irq_start);
+	new->el1_irq_time = 0;
+	new->el1_irq_no_handle_exit_time = 0;
+	new->el1_irq_nr = 0;
+	cutoff(new->sched_out_start);
+	new->sched_out_time = 0;
+	new->sched_out_nr = 0;
+	cutoff(new->exit_el1_handle_exit);
+	cutoff(new->entry_el1_loop_start);
+	cutoff(new->entry_el1);
+	cutoff(new->entry_el2);
+
+	estats->reset_time = now;
+}
+
 static void reset_vm_stats(struct kvm *kvm)
 {
 	struct kvm_vcpu *vcpu;
@@ -209,7 +250,7 @@ static void reset_vm_stats(struct kvm *kvm)
 
 	/* TODO: This feels racy, we don't care for now */
 	kvm_for_each_vcpu(i, vcpu, kvm)
-		kvm_vcpu_init_trap_stats(vcpu);
+		kvm_vcpu_reset_trap_stats(vcpu);
 }
 
 static void reset_all_stats(void)
@@ -279,7 +320,6 @@ static void print_estat(struct seq_file *m, unsigned long now,
 	unsigned long total_exit_nr = 0;
 	unsigned long total_exit_time_in_kvm = 0;
 
-
 	seq_printf(m, "--------------------------------------------------------\n");
 	for (i = 0; i < TRAP_MAX; i++) {
 		print_rec(m, trap_stat_names[i],
@@ -337,6 +377,33 @@ static void summarize_stats(struct kvm_exit_stats *s,
 		s->reset_time -= now - e->reset_time;
 }
 
+static void adjust_estat_for_sleep(unsigned long now, bool add,
+				   struct kvm_exit_stats *estats)
+{
+	struct kvm_exit_data *new = estats->new_edata;
+	unsigned long sleep_time = 0;
+	unsigned long extra_sched_out = 0;
+
+	/*
+	 * Handle sleeping VCPUs time keeping
+	 * (the summary will never have in_handle_exit set)
+	 */
+	if (estats->in_handle_exit && new->trap_reason == TRAP_WFI) {
+		sleep_time = now - new->exit_el2;
+
+		if (new->sched_out_start)
+			extra_sched_out = now - new->sched_out_start;
+	}
+
+	if (add) {
+		estats->trap_exit_time[TRAP_WFI] += sleep_time;
+		estats->total_sched_out_time += extra_sched_out;
+	} else {
+		estats->trap_exit_time[TRAP_WFI] -= sleep_time;
+		estats->total_sched_out_time -= extra_sched_out;
+	}
+}
+
 static int stats_fs_show(struct seq_file *m, void *v)
 {
 	struct kvm_exit_stats *estats, *summary;
@@ -354,12 +421,18 @@ static int stats_fs_show(struct seq_file *m, void *v)
 
 		kvm_for_each_vcpu(i, vcpu, kvm) {
 			estats = &vcpu->stat.exit_stats;
+
+			adjust_estat_for_sleep(now, true, estats);
+
 			snprintf(hdr, sizeof(hdr),
 				 "VM %d VCPU %d", vmid, vcpu->vcpu_id);
 			print_hdr(m, hdr, "Nr", "msec", "In-KVM");
 
 			print_estat(m, now, estats);
 			summarize_stats(summary, estats, now);
+
+			adjust_estat_for_sleep(now, false, estats);
+
 			seq_printf(m, "\n");
 		}
 
