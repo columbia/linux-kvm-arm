@@ -2171,13 +2171,15 @@ int kvm_irq_map_chip_pin(struct kvm *kvm, unsigned irqchip, unsigned pin)
 int kvm_set_irq(struct kvm *kvm, int irq_source_id,
 		u32 irq, int level, bool line_status)
 {
+	unsigned int spi = irq + VGIC_NR_PRIVATE_IRQS;
+
 	trace_kvm_set_irq(irq, level, irq_source_id);
 
 	BUG_ON(!vgic_initialized(kvm));
 
-	if (irq > kvm->arch.vgic.nr_irqs)
+	if (spi > kvm->arch.vgic.nr_irqs)
 		return -EINVAL;
-	return kvm_vgic_inject_irq(kvm, 0, irq, level);
+	return kvm_vgic_inject_irq(kvm, 0, spi, level);
 
 }
 
