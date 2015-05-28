@@ -544,6 +544,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		preempt_disable();
 		kvm_vgic_flush_hwstate(vcpu);
 
+
 		local_irq_disable();
 
 		/*
@@ -606,6 +607,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 */
 		kvm_guest_exit();
 		trace_kvm_exit(kvm_vcpu_trap_get_class(vcpu), *vcpu_pc(vcpu));
+
 
 		kvm_vgic_sync_hwstate(vcpu);
 
