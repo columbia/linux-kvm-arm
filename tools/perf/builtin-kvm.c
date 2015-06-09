@@ -1486,6 +1486,24 @@ static int __cmd_report(const char *file_name, int argc, const char **argv)
 	return cmd_report(i, rec_argv, NULL);
 }
 
+static int kvm_cmd_script(const char *file_name, int argc, const char **argv)
+{
+	int rec_argc, i = 0, j;
+	const char **rec_argv;
+
+	rec_argc = argc + 2;
+	rec_argv = calloc(rec_argc + 1, sizeof(char *));
+	rec_argv[i++] = strdup("script");
+	rec_argv[i++] = strdup("-i");
+	rec_argv[i++] = strdup(file_name);
+	for (j = 1; j < argc; j++, i++)
+		rec_argv[i] = argv[j];
+
+	BUG_ON(i != rec_argc);
+
+	return cmd_script(i, rec_argv, NULL);
+}
+
 static int
 __cmd_buildid_list(const char *file_name, int argc, const char **argv)
 {
@@ -1532,7 +1550,8 @@ int cmd_kvm(int argc, const char **argv, const char *prefix __maybe_unused)
 	};
 
 	const char *const kvm_subcommands[] = { "top", "record", "report", "diff",
-						"buildid-list", "stat", NULL };
+						"buildid-list", "stat", "script",
+						NULL };
 	const char *kvm_usage[] = { NULL, NULL };
 
 	perf_host  = 0;
@@ -1569,6 +1588,8 @@ int cmd_kvm(int argc, const char **argv, const char *prefix __maybe_unused)
 	else if (!strncmp(argv[0], "stat", 4))
 		return kvm_cmd_stat(file_name, argc, argv);
 #endif
+	else if (!strncmp(argv[0], "scr", 3))
+		return kvm_cmd_script(file_name, argc, argv);
 	else
 		usage_with_options(kvm_usage, kvm_options);
 
