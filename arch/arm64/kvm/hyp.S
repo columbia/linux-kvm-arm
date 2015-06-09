@@ -1018,6 +1018,70 @@ __kvm_vcpu_return:
 	ret
 END(__kvm_vcpu_run)
 
+// phys_addr_t __kvm_gva_to_gpa(struct kvm *kvm, struct kvm_vcpu *vcpu,
+// 				unsigned long gva);
+ENTRY(__kvm_gva_to_gpa)
+	dsb	ishst
+
+	kern_hyp_va	x0
+	ldr	x0, [x0, #KVM_VTTBR]
+	msr	vttbr_el2, x0
+	isb
+
+	push	lr, xzr
+	push	x8, x9
+	push	x16, x17
+	push	x18, x19
+	push	x20, x21
+	push	x22, x23
+	push	x24, x25
+	push	x26, x27
+	push	x28, x29
+
+	mov	x0, x2 // x0 = gva
+
+	kern_hyp_va	x1
+	ldr     x2, [x1, #VCPU_HCR_EL2]
+	msr     hcr_el2, x2
+	isb
+
+	ldr	x2, [x1, #VCPU_HOST_CONTEXT]
+	kern_hyp_va	x2
+	bl	__save_sysregs
+
+	add	x2, x1, #VCPU_CONTEXT
+	bl __restore_sysregs
+	isb
+
+	at	s1e1r, x0
+	isb
+	mrs	x0, par_el1
+
+	//x2 still VCPU_CONTEXT
+	bl __save_sysregs // TODO: Can this be omitted?
+
+	ldr	x2, [x1, #VCPU_HOST_CONTEXT]
+	kern_hyp_va x2
+	bl __restore_sysregs
+
+	mov	x2, #HCR_RW
+	msr	hcr_el2, x2
+
+	pop	x28, x29
+	pop	x26, x27
+	pop	x24, x25
+	pop	x22, x23
+	pop	x20, x21
+	pop	x18, x19
+	pop	x16, x17
+	pop	x8, x9
+	pop	lr, xzr
+
+
+	msr	vttbr_el2, xzr
+	ret
+ENDPROC(__kvm_gva_to_gpa)
+
 // void __kvm_tlb_flush_vmid_ipa(struct kvm *kvm, phys_addr_t ipa);
 ENTRY(__kvm_tlb_flush_vmid_ipa)
 	dsb	ishst

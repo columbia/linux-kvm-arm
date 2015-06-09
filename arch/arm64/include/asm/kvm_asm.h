@@ -128,6 +128,9 @@ extern void __kvm_flush_vm_context(void);
 extern void __kvm_tlb_flush_vmid_ipa(struct kvm *kvm, phys_addr_t ipa);
 extern void __kvm_tlb_flush_vmid(struct kvm *kvm);
 
+extern phys_addr_t __kvm_gva_to_gpa(struct kvm *kvm, struct kvm_vcpu *vcpu,
+				    phys_addr_t gva);
+
 extern int __kvm_vcpu_run(struct kvm_vcpu *vcpu);
 
 extern u64 __vgic_v3_get_ich_vtr_el2(void);

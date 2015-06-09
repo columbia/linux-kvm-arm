@@ -1490,8 +1490,7 @@ void perf_callchain_kernel(struct perf_callchain_entry *entry,
 	struct stackframe frame;
 
 	if (perf_guest_cbs && perf_guest_cbs->is_in_guest()) {
-		/* We don't support guest os callchain now */
-		return;
+		return perf_guest_cbs->callchain_kernel(entry);
 	}
 
 	frame.fp = regs->regs[29];
