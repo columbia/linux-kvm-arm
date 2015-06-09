@@ -161,6 +161,8 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
 {
 	int rctx;
 	struct perf_callchain_entry *entry;
+	bool user_mode;
+	u64 context;
 
 	int kernel = !event->attr.exclude_callchain_kernel;
 	int user   = !event->attr.exclude_callchain_user;
@@ -177,8 +179,18 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
 
 	entry->nr = 0;
 
-	if (kernel && !user_mode(regs)) {
-		perf_callchain_store(entry, PERF_CONTEXT_KERNEL);
+	if (perf_guest_cbs && perf_guest_cbs->is_in_guest())
+		user_mode = perf_guest_cbs->is_user_mode();
+	else
+		user_mode = user_mode(regs);
+
+	if (kernel && !user_mode) {
+		if (perf_guest_cbs && perf_guest_cbs->is_in_guest())
+			context = PERF_CONTEXT_GUEST_KERNEL;
+		else
+			context = PERF_CONTEXT_KERNEL;
+
+		perf_callchain_store(entry, context);
 		perf_callchain_kernel(entry, regs);
 	}
 
@@ -190,6 +202,11 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
 				regs = NULL;
 		}
 
+		if (perf_guest_cbs && perf_guest_cbs->is_in_guest())
+			context = PERF_CONTEXT_GUEST_USER;
+		else
+			context = PERF_CONTEXT_USER;
+
 		if (regs) {
 			/*
 			 * Disallow cross-task user callchains.
@@ -197,7 +214,7 @@ perf_callchain(struct perf_event *event, struct pt_regs *regs)
 			if (event->ctx->task && event->ctx->task != current)
 				goto exit_put;
 
-			perf_callchain_store(entry, PERF_CONTEXT_USER);
+			perf_callchain_store(entry, context);
 			perf_callchain_user(entry, regs);
 		}
 	}

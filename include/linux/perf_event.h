@@ -25,10 +25,13 @@
 # include <asm/local64.h>
 #endif
 
+struct perf_callchain_entry;
+
 struct perf_guest_info_callbacks {
 	int				(*is_in_guest)(void);
 	int				(*is_user_mode)(void);
 	unsigned long			(*get_guest_ip)(void);
+	void	(*callchain_kernel)(struct perf_callchain_entry *entry);
 };
 
 #ifdef CONFIG_HAVE_HW_BREAKPOINT
