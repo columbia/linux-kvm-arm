@@ -145,7 +145,7 @@ static void kvm_callchain_kernel(struct perf_callchain_entry *entry)
 
 static int kvm_is_in_guest(void)
 {
-        return kvm_arm_get_running_vcpu() != NULL;
+	return current->flags & PF_VCPU;
 }
 
 static int kvm_is_user_mode(void)
