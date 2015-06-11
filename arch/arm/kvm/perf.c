@@ -24,7 +24,7 @@
 
 static int kvm_is_in_guest(void)
 {
-        return kvm_arm_get_running_vcpu() != NULL;
+	return current->flags & PF_VCPU;
 }
 
 static int kvm_is_user_mode(void)
