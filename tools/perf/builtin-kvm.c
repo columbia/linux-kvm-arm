@@ -1504,6 +1504,32 @@ static int kvm_cmd_script(const char *file_name, int argc, const char **argv)
 	return cmd_script(i, rec_argv, NULL);
 }
 
+static int kvm_cmd_timechart(const char *file_name, int argc, const char **argv)
+{
+	int rec_argc, i = 0, j;
+	const char **rec_argv;
+
+
+	rec_argc = argc + 2;
+	rec_argv = calloc(rec_argc + 1, sizeof(char *));
+	rec_argv[i++] = strdup("timechart");
+	if (argc >= 2 && !strncmp(argv[1], "rec", 3)) {
+		rec_argv[i++] = strdup("record");
+		rec_argv[i++] = strdup("-o");
+		j = 2;
+	} else {
+		rec_argv[i++] = strdup("-i");
+		j = 1;
+	}
+	rec_argv[i++] = strdup(file_name);
+	for (; j < argc; j++, i++)
+		rec_argv[i] = argv[j];
+
+	BUG_ON(i != rec_argc);
+
+	return cmd_timechart(i, rec_argv, NULL);
+}
+
 static int
 __cmd_buildid_list(const char *file_name, int argc, const char **argv)
 {
@@ -1551,6 +1577,7 @@ int cmd_kvm(int argc, const char **argv, const char *prefix __maybe_unused)
 
 	const char *const kvm_subcommands[] = { "top", "record", "report", "diff",
 						"buildid-list", "stat", "script",
+						"timechart",
 						NULL };
 	const char *kvm_usage[] = { NULL, NULL };
 
@@ -1590,6 +1617,8 @@ int cmd_kvm(int argc, const char **argv, const char *prefix __maybe_unused)
 #endif
 	else if (!strncmp(argv[0], "scr", 3))
 		return kvm_cmd_script(file_name, argc, argv);
+	else if (!strncmp(argv[0], "timec", 5))
+		return kvm_cmd_timechart(file_name, argc, argv);
 	else
 		usage_with_options(kvm_usage, kvm_options);
 

@@ -67,6 +67,8 @@ struct timechart {
 				skip_eagain;
 	u64			min_time,
 				merge_dist;
+	/* Other options */
+	const char		*record_output_name;
 };
 
 struct per_pidcomm;
@@ -512,6 +514,12 @@ static const char *cat_backtrace(union perf_event *event,
 				break;
 			case PERF_CONTEXT_USER:
 				cpumode = PERF_RECORD_MISC_USER;
+				break;
+			case PERF_CONTEXT_GUEST_KERNEL:
+				cpumode = PERF_RECORD_MISC_GUEST_KERNEL;
+				break;
+			case PERF_CONTEXT_GUEST_USER:
+				cpumode = PERF_RECORD_MISC_GUEST_USER;
 				break;
 			default:
 				pr_debug("invalid callchain context: "
@@ -1811,6 +1819,12 @@ static int timechart__record(struct timechart *tchart, int argc, const char **ar
 	};
 	unsigned int tasks_args_nr = ARRAY_SIZE(tasks_args);
 
+	const char * output_args[] = {
+		"-o", "unused"
+	};
+	unsigned int output_args_nr = ARRAY_SIZE(output_args);
+
+
 #ifdef SUPPORT_OLD_POWER_EVENTS
 	if (!is_valid_tracepoint("power:cpu_idle") &&
 	    is_valid_tracepoint("power:power_start")) {
@@ -1832,8 +1846,15 @@ static int timechart__record(struct timechart *tchart, int argc, const char **ar
 	if (!tchart->with_backtrace)
 		backtrace_args_no = 0;
 
+	if (tchart->record_output_name) {
+		output_args[1] = tchart->record_output_name;
+	} else {
+		output_args_nr = 0;
+	}
+
 	record_elems = common_args_nr + tasks_args_nr +
-		power_args_nr + old_power_args_nr + backtrace_args_no;
+		power_args_nr + old_power_args_nr + backtrace_args_no +
+		output_args_nr;
 
 	rec_argc = record_elems + argc;
 	rec_argv = calloc(rec_argc + 1, sizeof(char *));
@@ -1856,6 +1877,10 @@ static int timechart__record(struct timechart *tchart, int argc, const char **ar
 
 	for (i = 0; i < old_power_args_nr; i++)
 		*p++ = strdup(old_power_args[i]);
+
+	for (i = 0; i < output_args_nr; i++) {
+		*p++ = strdup(output_args[i]);
+	}
 
 	for (j = 0; j < (unsigned int)argc; j++)
 		*p++ = argv[j];
@@ -1970,6 +1995,7 @@ int cmd_timechart(int argc, const char **argv,
 	OPT_BOOLEAN('I', "io-only", &tchart.io_only,
 		    "record only IO data"),
 	OPT_BOOLEAN('g', "callchain", &tchart.with_backtrace, "record callchain"),
+	OPT_STRING('o', "output", &tchart.record_output_name, "file", "output file name"),
 	OPT_END()
 	};
 	const char * const timechart_record_usage[] = {
