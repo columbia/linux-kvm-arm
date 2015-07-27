@@ -49,13 +49,12 @@ static void *mmio_read_user_addr;
 static void *vgic_dist_addr;
 static void *vgic_cpu_addr;
 
-extern void *gic_data_dist_base_ex(void);
-extern void *gic_data_cpu_base_ex(void);
-
 volatile int cpu1_ipi_ack;
 
 #ifndef CONFIG_ARM64
+#ifdef CONFIG_ARM
 __asm__(".arch_extension	virt");
+#endif
 #endif
 
 
@@ -71,7 +70,14 @@ __asm__(".arch_extension	virt");
 #define PROCFS_MAX_SIZE 128
 #define MAX_MSG_LEN 512
 
-extern void smp_send_virttest(int cpu);
+u64 inline call_hyp(void *hypfn)
+{
+#ifdef CONFIG_ARM
+	kvm_call_hyp(hypfn);
+#elif CONFIG_X86_64
+	;
+#endif
+}
 
 static noinline void __noop(void)
 {
@@ -84,13 +90,20 @@ static __always_inline volatile unsigned long read_cc(void)
 	isb();
 	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
 	isb();
-#else
+#elif CONFIG_ARM
 	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#elif CONFIG_X86_64
+	unsigned long lo_cc, hi_cc;
+	asm( "rdtsc" : "=a" (lo_cc), "=d" (hi_cc) );
+	return lo_cc | (hi_cc << 32);
 #endif
 	return cc;
 }
 
+
 #define GICC_EOIR		0x00000010
+#ifdef CONFIG_ARM
+extern void smp_send_virttest(int cpu);
 
 void send_and_wait_ipi(void)
 {
@@ -113,7 +126,12 @@ void send_and_wait_ipi(void)
 
 	return;
 }
-
+#elif CONFIG_X86_64
+void send_and_wait_ipi(void)
+{
+}
+#endif
+ 
 static unsigned long ipi_test(void)
 {
 	unsigned long ret, cc_before, cc_after;
@@ -137,7 +155,7 @@ static unsigned long hvc_test(void)
 
 	local_irq_save(flags);
 	cc_before = read_cc();
-	kvm_call_hyp((void*)HVC_NOOP);
+	call_hyp((void*)HVC_NOOP);
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -166,7 +184,10 @@ static unsigned long mmio_user(void)
 	u32 val;
 
 	cc_before = read_cc();
+#ifdef CONFIG_ARM
 	val = readl(mmio_read_user_addr + 0x8); // MMIO USER
+#elif CONFIG_X86_64
+#endif
 	cc_after = read_cc();
 	ret = CYCLE_COUNT(cc_before, cc_after);
 	return ret;
@@ -181,7 +202,10 @@ static unsigned long mmio_kernel(void)
 
 	local_irq_save(flags);
 	cc_before = read_cc();
+#ifdef CONFIG_ARM
 	val = readl(vgic_dist_addr + 0x8); /* GICD_IIDR */
+#elif CONFIG_X86_64
+#endif	
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -198,7 +222,10 @@ static unsigned long eoi_test(void)
 	val = 1023;
 	local_irq_save(flags);
 	cc_before = read_cc();
+#ifdef CONFIG_ARM
 	writel(val, vgic_cpu_addr + GICC_EOIR);
+#elif CONFIG_X86_64
+#endif
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -237,7 +264,7 @@ static unsigned long trap_out_test(void)
 			[after_hvc] "=r" (after_hvc),
 			[eoh] "=r" (eoh): :
 			"x0", "x1", "x2", "x3", "x4");
-#else
+#elif CONFIG_ARM
 	asm volatile(
 			"mov r0, #0x4c000000\n\t"
 			"mrc p15, 0, r3, c9, c13, 0\n\t"
@@ -284,7 +311,7 @@ static unsigned long trap_in_test(void)
 			[cc1] "=r" (cc1),
 			[cc2] "=r" (cc2): :
 			"x0", "x1", "x2", "x3");
-#else
+#elif CONFIG_ARM
 	asm volatile(
 			"mov r0, #0x4c000000\n\t"
 			"mrc p15, 0, r3, c9, c13, 0\n\t"
@@ -312,7 +339,10 @@ static unsigned long vmswitch_send_test(void)
 
 	local_irq_save(flags);
 	cc_before = read_cc();
+#ifdef CONFIG_ARM
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
+#elif CONFIG_X86_64
+#endif
 	if (ret)
 		kvm_err("Sending HVC VM switch measure error: %lu\n", ret);
 	cc_after = read_cc();
@@ -328,10 +358,10 @@ static unsigned long vmswitch_recv_test(void)
 	unsigned long flags;
 
 	local_irq_save(flags);
-	cc_before = kvm_call_hyp((void*)HVC_VMSWITCH_RCV);
+	cc_before = call_hyp((void*)HVC_VMSWITCH_RCV);
 	cc_after = read_cc();
 
-	kvm_call_hyp((void*)HVC_VMSWITCH_DONE);
+	call_hyp((void*)HVC_VMSWITCH_DONE);
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
@@ -344,14 +374,14 @@ static unsigned long trap_profile_start(void)
 	unsigned long ret = 0;
 	trace_printk("started!\n");
 	cc_start = read_cc();
-	kvm_call_hyp((void*)TRAP_MEASURE_START);
+	call_hyp((void*)TRAP_MEASURE_START);
 	return ret;
 }
 
 static unsigned long trap_profile_end(void)
 {
 	unsigned long ret = 0;
-	kvm_call_hyp((void*)TRAP_MEASURE_END);
+	call_hyp((void*)TRAP_MEASURE_END);
 	cc_end = read_cc();
 	trace_printk("start: %lu, end: %lu, diff: %lu\n", cc_start, cc_end, cc_end - cc_start);
 	trace_printk("ended!\n");
@@ -363,12 +393,14 @@ static unsigned long el2_exit_top(void)
 	unsigned long cc, flags;
 
 	local_irq_save(flags);
+#ifdef CONFIG_ARM
 	asm volatile(
 			"mov x0, #0x20000\n\t"
 			"hvc #0\n\t"
 			"mov %[cc], x0\n\t":
 			[cc] "=r" (cc)::
 			"x0");
+#endif
 	local_irq_restore(flags);
 	return cc;
 }
@@ -378,12 +410,14 @@ static unsigned long el2_exit_bot(void)
 	unsigned long cc, flags;
 
 	local_irq_save(flags);
+#ifdef CONFIG_ARM
 	asm volatile(
 			"mov x0, #0x30000\n\t"
 			"hvc #0\n\t"
 			"mov %[cc], x0\n\t":
 			[cc] "=r" (cc)::
 			"x0", "x1");
+#endif
 	local_irq_restore(flags);
 
 	return cc;
@@ -405,6 +439,10 @@ struct virt_test available_tests[] = {
 	{ "el2-exit-top",	el2_exit_top	        },
 	{ "el2-exit-bot",	el2_exit_bot	        },
 };
+
+#ifdef CONFIG_ARM
+extern void *gic_data_dist_base_ex(void);
+extern void *gic_data_cpu_base_ex(void);
 
 static int init_mmio_test(void)
 {
@@ -431,6 +469,13 @@ static int init_mmio_test(void)
 out:
 	return ret;
 }
+#elif CONFIG_X86_64
+static int init_mmio_test(void)
+{
+	int ret = 0;
+	return ret;
+}
+#endif
 
 static void loop_test(struct virt_test *test)
 {
@@ -573,7 +618,7 @@ static int __init virt_test_init(void)
 	int ret;
 
 	/* Initialize and enable the cycle counter on Xen systems */
-	kvm_call_hyp((void*)HVC_CCNT_ENABLE);
+	call_hyp((void*)HVC_CCNT_ENABLE);
 
 	/* Initialize MMIO regions we ned */
 	ret = init_mmio_test();
