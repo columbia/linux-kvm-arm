@@ -75,7 +75,8 @@ u64 inline call_hyp(void *hypfn)
 #ifdef CONFIG_ARM
 	kvm_call_hyp(hypfn);
 #elif CONFIG_X86_64
-	;
+	unsigned long b, c, d;
+	asm volatile ("vmcall" : "+hypfn"(hypfn), "=b"(b), "=c"(c), "=d"(d));
 #endif
 }
 
