@@ -93,9 +93,7 @@ static __always_inline volatile unsigned long read_cc(void)
 #elif CONFIG_ARM
 	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
 #elif CONFIG_X86_64
-	unsigned long lo_cc, hi_cc;
-	asm( "rdtsc" : "=a" (lo_cc), "=d" (hi_cc) );
-	return lo_cc | (hi_cc << 32);
+	rdtscll(cc);
 #endif
 	return cc;
 }
@@ -167,6 +165,7 @@ static unsigned long noop_test(void)
 {
 	unsigned long ret, cc_before, cc_after;
 	unsigned long flags;
+	unsigned long i = 0;
 
 	local_irq_save(flags);
 	cc_before = read_cc();
