@@ -24,6 +24,8 @@
 #define KVM_HC_MIPS_EXIT_VM		7
 #define KVM_HC_MIPS_CONSOLE_OUTPUT	8
 
+#define HVC_NOOP		0x4b000000
+
 /*
  * hypercalls use architecture specific
  */

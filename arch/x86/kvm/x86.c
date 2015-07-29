@@ -5916,6 +5916,11 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		return kvm_hv_hypercall(vcpu);
 
 	nr = kvm_register_read(vcpu, VCPU_REGS_RAX);
+	if (nr == HVC_NOOP) {
+		ret = 0;
+		goto out;
+	}
+
 	a0 = kvm_register_read(vcpu, VCPU_REGS_RBX);
 	a1 = kvm_register_read(vcpu, VCPU_REGS_RCX);
 	a2 = kvm_register_read(vcpu, VCPU_REGS_RDX);
