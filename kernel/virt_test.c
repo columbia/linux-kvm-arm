@@ -205,6 +205,7 @@ static unsigned long mmio_kernel(void)
 #ifdef CONFIG_ARM
 	val = readl(vgic_dist_addr + 0x8); /* GICD_IIDR */
 #elif CONFIG_X86_64
+	val = apic_read(APIC_ID);
 #endif	
 	cc_after = read_cc();
 	local_irq_restore(flags);
