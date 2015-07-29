@@ -225,6 +225,7 @@ static unsigned long eoi_test(void)
 #ifdef CONFIG_ARM
 	writel(val, vgic_cpu_addr + GICC_EOIR);
 #elif CONFIG_X86_64
+	apic_write(APIC_EOI, APIC_EOI_ACK);
 #endif
 	cc_after = read_cc();
 	local_irq_restore(flags);
