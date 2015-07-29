@@ -145,6 +145,17 @@ static unsigned long hvc_test(void)
 	return ret;
 }
 
+static unsigned long cc_enable(void)
+{
+	unsigned long flags;
+
+	local_irq_save(flags);
+	kvm_call_hyp((void*)HVC_CCNT_ENABLE);
+	local_irq_restore(flags);
+
+	return 0;
+}
+
 static unsigned long noop_test(void)
 {
 	unsigned long ret, cc_before, cc_after;
@@ -314,7 +325,7 @@ static unsigned long vmswitch_send_test(void)
 	cc_before = read_cc();
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
 	if (ret)
-		kvm_err("Sending HVC VM switch measure error: %d\n", ret);
+		kvm_err("Sending HVC VM switch measure error: %d\n", (int)ret);
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -371,6 +382,7 @@ struct virt_test available_tests[] = {
 	{ "vmswitch_recv",	vmswitch_recv_test	},
 	{ "trap-profile-start", trap_profile_start      },
 	{ "trap-profile-end",   trap_profile_end        },
+	{ "cc-enable",		cc_enable	        },
 };
 
 static int init_mmio_test(void)
