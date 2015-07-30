@@ -23,6 +23,7 @@
 #include <linux/interrupt.h>
 #include <linux/cpu.h>
 #include <linux/gfp.h>
+#include <linux/virt_test.h>
 
 #include <asm/mtrr.h>
 #include <asm/tlbflush.h>
@@ -337,6 +338,23 @@ static int __init nonmi_ipi_setup(char *str)
 {
 	smp_no_nmi_ipi = true;
 	return 1;
+}
+
+__visible void smp_trace_unittest_interrupt(struct pt_regs *regs)
+{
+	;
+}
+
+void smp_send_virttest(int cpu)
+{
+	apic->send_IPI_mask(cpumask_of(cpu), UNITTEST_IPI_VECTOR);
+}
+
+__visible void smp_unittest_interrupt(struct pt_regs *regs)
+{
+	smp_entering_irq();
+	cpu1_ipi_ack = 1;
+	exiting_irq();
 }
 
 __setup("nonmi_ipi", nonmi_ipi_setup);

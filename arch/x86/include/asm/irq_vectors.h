@@ -102,6 +102,8 @@
  */
 #define X86_PLATFORM_IPI_VECTOR		0xf7
 
+#define UNITTEST_IPI_VECTOR		0xf6
+
 /* Vector for KVM to deliver posted interrupt IPI */
 #ifdef CONFIG_HAVE_KVM
 #define POSTED_INTR_VECTOR		0xf2

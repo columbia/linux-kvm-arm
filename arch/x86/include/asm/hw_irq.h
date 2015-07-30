@@ -77,6 +77,8 @@ extern asmlinkage void threshold_interrupt(void);
 extern asmlinkage void call_function_interrupt(void);
 extern asmlinkage void call_function_single_interrupt(void);
 
+extern asmlinkage void unittest_interrupt(void);
+
 #ifdef CONFIG_TRACING
 /* Interrupt handlers registered during init_IRQ */
 extern void trace_apic_timer_interrupt(void);
@@ -86,6 +88,7 @@ extern void trace_irq_work_interrupt(void);
 extern void trace_spurious_interrupt(void);
 extern void trace_thermal_interrupt(void);
 extern void trace_reschedule_interrupt(void);
+extern void trace_unittest_interrupt(void);
 extern void trace_threshold_interrupt(void);
 extern void trace_call_function_interrupt(void);
 extern void trace_call_function_single_interrupt(void);
@@ -179,6 +182,7 @@ extern __visible void smp_reschedule_interrupt(struct pt_regs *);
 extern __visible void smp_call_function_interrupt(struct pt_regs *);
 extern __visible void smp_call_function_single_interrupt(struct pt_regs *);
 extern __visible void smp_invalidate_interrupt(struct pt_regs *);
+extern __visible void smp_unittest_interrupt(struct pt_regs *);
 #endif
 
 extern void (*__initconst interrupt[FIRST_SYSTEM_VECTOR

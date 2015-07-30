@@ -992,6 +992,9 @@ apicinterrupt ERROR_APIC_VECTOR \
 apicinterrupt SPURIOUS_APIC_VECTOR \
 	spurious_interrupt smp_spurious_interrupt
 
+apicinterrupt UNITTEST_IPI_VECTOR \
+	unittest_interrupt smp_unittest_interrupt
+
 #ifdef CONFIG_IRQ_WORK
 apicinterrupt IRQ_WORK_VECTOR \
 	irq_work_interrupt smp_irq_work_interrupt

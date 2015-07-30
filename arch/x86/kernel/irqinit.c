@@ -121,6 +121,8 @@ static void __init smp_intr_init(void)
 
 	/* IPI used for rebooting/stopping */
 	alloc_intr_gate(REBOOT_VECTOR, reboot_interrupt);
+
+	alloc_intr_gate(UNITTEST_IPI_VECTOR, unittest_interrupt);
 #endif /* CONFIG_SMP */
 }
 
