@@ -101,7 +101,6 @@ static __always_inline volatile unsigned long read_cc(void)
 
 
 #define GICC_EOIR		0x00000010
-#ifdef CONFIG_ARM
 extern void smp_send_virttest(int cpu);
 
 void send_and_wait_ipi(void)
@@ -125,12 +124,7 @@ void send_and_wait_ipi(void)
 
 	return;
 }
-#elif CONFIG_X86_64
-void send_and_wait_ipi(void)
-{
-}
-#endif
- 
+
 static unsigned long ipi_test(void)
 {
 	unsigned long ret, cc_before, cc_after;

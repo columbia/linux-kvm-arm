@@ -23,6 +23,7 @@
 #include <linux/interrupt.h>
 #include <linux/cpu.h>
 #include <linux/gfp.h>
+#include <linux/virt_test.h>
 
 #include <asm/mtrr.h>
 #include <asm/tlbflush.h>
@@ -326,6 +327,21 @@ __visible void smp_trace_call_function_single_interrupt(struct pt_regs *regs)
 	__smp_call_function_single_interrupt();
 	trace_call_function_single_exit(CALL_FUNCTION_SINGLE_VECTOR);
 	exiting_irq();
+}
+
+noinline void virttest_ipi_ack(void)
+{
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cpu1_ipi_ack = 1;
+	local_irq_restore(flags);
+}
+
+void smp_send_virttest(int cpu)
+{
+	smp_call_function_single(cpu, (smp_call_func_t)virttest_ipi_ack,
+			NULL, 0);
 }
 
 static int __init nonmi_ipi_setup(char *str)
