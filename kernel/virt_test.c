@@ -187,6 +187,7 @@ static unsigned long mmio_user(void)
 #ifdef CONFIG_ARM
 	val = readl(mmio_read_user_addr + 0x8); // MMIO USER
 #elif CONFIG_X86_64
+	inl(0x1234);
 #endif
 	cc_after = read_cc();
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -205,7 +206,8 @@ static unsigned long mmio_kernel(void)
 #ifdef CONFIG_ARM
 	val = readl(vgic_dist_addr + 0x8); /* GICD_IIDR */
 #elif CONFIG_X86_64
-	val = apic_read(APIC_ID);
+	//val = apic_read(APIC_ID);
+	inb(0x4d0);
 #endif	
 	cc_after = read_cc();
 	local_irq_restore(flags);
