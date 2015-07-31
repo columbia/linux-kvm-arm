@@ -36,6 +36,8 @@
 #include <linux/virt_test.h>
 #include <linux/proc_fs.h>
 #include <asm/io.h>
+#include <asm/hypervisor.h>
+#include <asm/xen/hypercall.h>
 
 #define HVC_NOOP		0x4b000000
 #define HVC_CCNT_ENABLE		0x4b000001
@@ -77,6 +79,8 @@ u64 inline call_hyp(void *hypfn)
 #elif CONFIG_X86_64
 	unsigned long b, c, d;
 	asm volatile ("vmcall" : "+hypfn"(hypfn), "=b"(b), "=c"(c), "=d"(d));
+	/* This is a hyp call for Xen */
+	/* _hypercall0(int, dummy_hyp); */
 #endif
 }
 
@@ -275,6 +279,10 @@ static unsigned long trap_out_test(void)
 			[cc1] "=r" (cc1),
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
+#elif CONFIG_X86_64
+	call_hyp((void*)HVC_NOOP);
+	asm volatile("mov %%rdx, %0": "=r" (soh));
+	after_hvc = read_cc();
 #endif
 	local_irq_restore(flags);
 	trap_out = after_hvc - soh;
@@ -322,6 +330,10 @@ static unsigned long trap_in_test(void)
 			[cc1] "=r" (cc1),
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
+#elif CONFIG_X86_64
+	cc0 = read_cc();
+	call_hyp((void*)HVC_NOOP);
+	asm volatile("mov %%rdx, %0": "=r" (cc1));
 #endif
 	local_irq_restore(flags);
 
