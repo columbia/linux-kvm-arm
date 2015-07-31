@@ -438,7 +438,7 @@ struct virt_test available_tests[] = {
 	{ "el2-exit-bot",	el2_exit_bot	        },
 };
 
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 extern void *gic_data_dist_base_ex(void);
 extern void *gic_data_cpu_base_ex(void);
 
