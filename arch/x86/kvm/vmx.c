@@ -8216,6 +8216,13 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		"jmp 2f \n\t"
 		"1: " __ex(ASM_VMX_VMRESUME) "\n\t"
 		"2: "
+		"cmp $0x4b000001, %%" _ASM_AX "\n\t"
+		"jne 3f \n\t"
+		"rdtsc \n\t"
+		"shl $0x20, %%" _ASM_DX "\n\t"
+		"or %%" _ASM_AX ", %%" _ASM_DX "\n\t"
+		"vmresume \n\t"
+		"3: "
 		/* Save guest registers, load host registers, keep flags */
 		"mov %0, %c[wordsize](%%" _ASM_SP ") \n\t"
 		"pop %0 \n\t"
@@ -8276,7 +8283,7 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		, "eax", "ebx", "edi", "esi"
 #endif
 	      );
-
+	vmx->fail = 0;
 	/* MSR_IA32_DEBUGCTLMSR is zeroed on vmexit. Restore it if needed */
 	if (debugctlmsr)
 		update_debugctlmsr(debugctlmsr);
