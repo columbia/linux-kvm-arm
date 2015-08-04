@@ -52,6 +52,7 @@ static void *vgic_dist_addr;
 static void *vgic_cpu_addr;
 
 volatile int cpu1_ipi_ack;
+extern int simpleif_request_dummy(void);
 
 #ifndef CONFIG_ARM64
 #ifdef CONFIG_ARM
@@ -433,6 +434,12 @@ static unsigned long el2_exit_bot(void)
 	return cc;
 }
 
+static unsigned long io_latency(void)
+{
+	simpleif_request_dummy();
+	return 1024*128; /* it will run 4096 times */
+}
+
 struct virt_test available_tests[] = {
 	{ "hvc",		hvc_test	},
 	{ "mmio_read_user",	mmio_user	},
@@ -448,6 +455,7 @@ struct virt_test available_tests[] = {
 	{ "trap-profile-end",   trap_profile_end        },
 	{ "el2-exit-top",	el2_exit_top	        },
 	{ "el2-exit-bot",	el2_exit_bot	        },
+	{ "io-latency"	,	io_latency},
 };
 
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
