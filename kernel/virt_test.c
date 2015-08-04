@@ -53,6 +53,7 @@ extern void *gic_data_dist_base_ex(void);
 extern void *gic_data_cpu_base_ex(void);
 
 volatile int cpu1_ipi_ack;
+extern int simpleif_request_dummy(void);
 
 #ifndef CONFIG_ARM64
 __asm__(".arch_extension	virt");
@@ -358,6 +359,12 @@ static unsigned long trap_profile_end(void)
 	return ret;
 }
 
+static unsigned long io_latency(void)
+{
+	simpleif_request_dummy();
+	return 1024*128; /* it will run 4096 times */
+}
+
 struct virt_test available_tests[] = {
 	{ "hvc",		hvc_test	},
 	{ "mmio_read_user",	mmio_user	},
@@ -371,6 +378,7 @@ struct virt_test available_tests[] = {
 	{ "vmswitch_recv",	vmswitch_recv_test	},
 	{ "trap-profile-start", trap_profile_start      },
 	{ "trap-profile-end",   trap_profile_end        },
+	{ "io-latency",   	io_latency	},
 };
 
 static int init_mmio_test(void)
@@ -538,9 +546,6 @@ static const struct file_operations virttest_once_proc_fops = {
 static int __init virt_test_init(void)
 {
 	int ret;
-
-	/* Initialize and enable the cycle counter on Xen systems */
-	kvm_call_hyp((void*)HVC_CCNT_ENABLE);
 
 	/* Initialize MMIO regions we ned */
 	ret = init_mmio_test();

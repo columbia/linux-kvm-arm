@@ -187,6 +187,7 @@ __xenbus_switch_state(struct xenbus_device *dev,
 	int current_state;
 	int err, abort;
 
+
 	if (state == dev->state)
 		return 0;
 
@@ -200,11 +201,13 @@ again:
 	}
 
 	err = xenbus_scanf(xbt, dev->nodename, "state", "%d", &current_state);
-	if (err != 1)
+	if (err != 1) {
 		goto abort;
+	}
 
 	err = xenbus_printf(xbt, dev->nodename, "state", "%d", state);
 	if (err) {
+		
 		xenbus_switch_fatal(dev, depth, err, "writing new state");
 		goto abort;
 	}
