@@ -33,7 +33,7 @@ static __always_inline volatile unsigned long read_cc(void)
 	isb();
 	asm volatile("mrs %0, CNTPCT_EL0" : "=r" (cc) ::);
 	isb();
-#else
+#elif CONFIG_ARM
 	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
 #endif
 	return cc;
