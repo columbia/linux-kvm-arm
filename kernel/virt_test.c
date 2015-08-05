@@ -75,8 +75,8 @@ __asm__(".arch_extension	virt");
 
 u64 inline call_hyp(void *hypfn)
 {
-#ifdef CONFIG_ARM
-	kvm_call_hyp(hypfn);
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
+	return kvm_call_hyp(hypfn);
 #elif CONFIG_X86_64
 	unsigned long b, c, d;
 	asm volatile ("vmcall" : "+hypfn"(hypfn), "=b"(b), "=c"(c), "=d"(d));
@@ -350,7 +350,7 @@ static unsigned long vmswitch_send_test(void)
 
 	local_irq_save(flags);
 	cc_before = read_cc();
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
 #elif CONFIG_X86_64
 #endif
@@ -369,9 +369,11 @@ static unsigned long vmswitch_recv_test(void)
 	unsigned long flags;
 
 	local_irq_save(flags);
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	cc_before = call_hyp((void*)HVC_VMSWITCH_RCV);
+#elif CONFIG_X86_64
+#endif
 	cc_after = read_cc();
-
 	call_hyp((void*)HVC_VMSWITCH_DONE);
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
