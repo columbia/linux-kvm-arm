@@ -637,9 +637,6 @@ static int __init virt_test_init(void)
 {
 	int ret;
 
-	/* Initialize and enable the cycle counter on Xen systems */
-	call_hyp((void*)HVC_CCNT_ENABLE);
-
 	/* Initialize MMIO regions we ned */
 	ret = init_mmio_test();
 	if (ret) {
