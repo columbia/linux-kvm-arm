@@ -103,7 +103,49 @@ static __always_inline volatile unsigned long read_cc(void)
 #endif
 	return cc;
 }
+static __always_inline volatile unsigned long read_cc_before(void)
+{
+        unsigned long cc;
+#ifdef CONFIG_ARM64
+        isb();
+        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+        isb();
+#elif CONFIG_ARM
+        asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#elif CONFIG_X86_64
+        asm volatile ("CPUID\n\t"::: "%rax", "%rbx", "%rcx", "%rdx");
+        asm volatile ( "RDTSC\n\t"
+                        "shl $0x20, %%rdx\n\t"
+                        "or %%rax, %%rdx\n\t"
+                        "mov %%rdx, %0\n\t"
+                        : "=r" (cc)
+                        :: "%rax", "%rbx", "%rcx", "%rdx");
+#endif
+        return cc;
+}
 
+static __always_inline volatile unsigned long read_cc_after(void)
+{
+        unsigned long cc;
+#ifdef CONFIG_ARM64
+        isb();
+        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+        isb();
+#elif CONFIG_ARM
+        asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#elif CONFIG_X86_64
+        asm volatile (
+                        "mov %%cr0, %%rax\n\t"
+                        "mov %%rax, %%cr0\n\t"
+                        "RDTSC\n\t"
+                        "shl $0x20, %%rdx\n\t"
+                        "or %%rax, %%rdx\n\t"
+                        "mov %%rdx, %0\n\t"
+                        : "=r" (cc)
+                        :: "%rax", "%rdx");
+#endif
+        return cc;
+}
 
 #define GICC_EOIR		0x00000010
 extern void smp_send_virttest(int cpu);
@@ -136,9 +178,9 @@ static unsigned long ipi_test(void)
 	unsigned long flags;
 
 	local_irq_save(flags);
-	cc_before = read_cc();
+	cc_before = read_cc_before();
 	send_and_wait_ipi();
-	cc_after = read_cc();
+	cc_after = read_cc_after();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
@@ -152,9 +194,9 @@ static unsigned long hvc_test(void)
 	unsigned long flags;
 
 	local_irq_save(flags);
-	cc_before = read_cc();
+	cc_before = read_cc_before();
 	call_hyp((void*)HVC_NOOP);
-	cc_after = read_cc();
+	cc_after = read_cc_after();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
@@ -168,9 +210,9 @@ static unsigned long noop_test(void)
 	unsigned long i = 0;
 
 	local_irq_save(flags);
-	cc_before = read_cc();
+	cc_before = read_cc_before();
 	__noop();
-	cc_after = read_cc();
+	cc_after = read_cc_after();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
@@ -182,13 +224,13 @@ static unsigned long mmio_user(void)
 	unsigned long ret, cc_before, cc_after;
 	u32 val;
 
-	cc_before = read_cc();
+	cc_before = read_cc_before();
 #ifdef CONFIG_ARM
 	val = readl(mmio_read_user_addr + 0x8); // MMIO USER
 #elif CONFIG_X86_64
 	inl(0x1234);
 #endif
-	cc_after = read_cc();
+	cc_after = read_cc_after();
 	ret = CYCLE_COUNT(cc_before, cc_after);
 	return ret;
 }
@@ -201,14 +243,14 @@ static unsigned long mmio_kernel(void)
 	unsigned long flags;
 
 	local_irq_save(flags);
-	cc_before = read_cc();
+	cc_before = read_cc_before();
 #ifdef CONFIG_ARM
 	val = readl(vgic_dist_addr + 0x8); /* GICD_IIDR */
 #elif CONFIG_X86_64
 	//val = apic_read(APIC_ID);
 	inb(0x4d0);
 #endif	
-	cc_after = read_cc();
+	cc_after = read_cc_after();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
@@ -223,13 +265,13 @@ static unsigned long eoi_test(void)
 	unsigned long flags;
 	val = 1023;
 	local_irq_save(flags);
-	cc_before = read_cc();
+	cc_before = read_cc_before();
 #ifdef CONFIG_ARM
 	writel(val, vgic_cpu_addr + GICC_EOIR);
 #elif CONFIG_X86_64
 	apic_write(APIC_EOI, APIC_EOI_ACK);
 #endif
-	cc_after = read_cc();
+	cc_after = read_cc_after();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
@@ -283,7 +325,7 @@ static unsigned long trap_out_test(void)
 #elif CONFIG_X86_64
 	call_hyp((void*)HVC_NOOP);
 	asm volatile("mov %%rdx, %0": "=r" (soh));
-	after_hvc = read_cc();
+	after_hvc = read_cc_after();
 #endif
 	local_irq_restore(flags);
 	trap_out = after_hvc - soh;
@@ -332,7 +374,7 @@ static unsigned long trap_in_test(void)
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
 #elif CONFIG_X86_64
-	cc0 = read_cc();
+	cc0 = read_cc_before();
 	call_hyp((void*)HVC_NOOP);
 	asm volatile("mov %%rdx, %0": "=r" (cc1));
 #endif
@@ -349,14 +391,14 @@ static unsigned long vmswitch_send_test(void)
 	unsigned long flags;
 
 	local_irq_save(flags);
-	cc_before = read_cc();
+	cc_before = read_cc_before();
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
 #elif CONFIG_X86_64
 #endif
 	if (ret)
 		kvm_err("Sending HVC VM switch measure error: %lu\n", ret);
-	cc_after = read_cc();
+	cc_after = read_cc_after();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
@@ -373,7 +415,7 @@ static unsigned long vmswitch_recv_test(void)
 	cc_before = call_hyp((void*)HVC_VMSWITCH_RCV);
 #elif CONFIG_X86_64
 #endif
-	cc_after = read_cc();
+	cc_after = read_cc_after();
 	call_hyp((void*)HVC_VMSWITCH_DONE);
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -386,7 +428,7 @@ static unsigned long trap_profile_start(void)
 {
 	unsigned long ret = 0;
 	trace_printk("started!\n");
-	cc_start = read_cc();
+	cc_start = read_cc_before();
 	call_hyp((void*)TRAP_MEASURE_START);
 	return ret;
 }
@@ -395,7 +437,7 @@ static unsigned long trap_profile_end(void)
 {
 	unsigned long ret = 0;
 	call_hyp((void*)TRAP_MEASURE_END);
-	cc_end = read_cc();
+	cc_end = read_cc_after();
 	trace_printk("start: %lu, end: %lu, diff: %lu\n", cc_start, cc_end, cc_end - cc_start);
 	trace_printk("ended!\n");
 	return ret;
