@@ -200,6 +200,40 @@ static unsigned long mmio_kernel(void)
 	return ret;
 }
 
+static unsigned long io_latency_write(void)
+{
+	unsigned long ret, cc_before, cc_after;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = read_cc();
+	writeq(cc_before, vgic_dist_addr + 0x80); /* GICD_IGROUP */
+	cc_after = read_cc();
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	return ret;
+}
+
+static unsigned long io_latency_read(void)
+{
+	unsigned long ret, cc_before, cc_after;
+	unsigned long cc_kern;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = read_cc();
+	cc_kern = readq(vgic_dist_addr + 0x80); /* GICD_IGROUP */
+	cc_after = read_cc();
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	trace_printk("i/o latency read: %lu - %lu = %lu\n",
+		     cc_after, cc_kern, cc_after - cc_kern);
+
+	return ret;
+}
+
 static unsigned long eoi_test(void)
 {
 	unsigned long ret, cc_before, cc_after;
@@ -373,6 +407,9 @@ struct virt_test available_tests[] = {
 	{ "hvc",		hvc_test	},
 	{ "mmio_read_user",	mmio_user	},
 	{ "mmio_read_vgic",	mmio_kernel	},
+	{ "mmio_read_vgic",	mmio_kernel	},
+	{ "io_latency_write",	io_latency_write	},
+	{ "io_latency_read",	io_latency_read		},
 	{ "eoi",		eoi_test	},
 	{ "noop_guest",		noop_test	},
 	{ "ipi",		ipi_test	},
