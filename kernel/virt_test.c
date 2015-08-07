@@ -32,7 +32,10 @@
 #include <linux/unistd.h>
 #include <linux/init.h>
 #include <linux/cpu.h>
+#include <linux/interrupt.h>
 #include <linux/kvm_host.h>
+#include <linux/of.h>
+#include <linux/of_irq.h>
 #include <linux/virt_test.h>
 #include <linux/proc_fs.h>
 #include <asm/io.h>
@@ -196,6 +199,59 @@ static unsigned long mmio_kernel(void)
 	cc_after = read_cc();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	return ret;
+}
+
+static unsigned long io_latency_write(void)
+{
+	unsigned long ret, cc_before, cc_after;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = read_cc();
+	writeq(cc_before, vgic_dist_addr + 0x80); /* GICD_IGROUP */
+	cc_after = read_cc();
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	return ret;
+}
+
+static unsigned long io_latency_read(void)
+{
+	unsigned long ret, cc_before, cc_after;
+	unsigned long cc_kern;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = read_cc();
+	cc_kern = readq(vgic_dist_addr + 0x80); /* GICD_IGROUP */
+	cc_after = read_cc();
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	trace_printk("i/o latency read: %lu - %lu = %lu\n",
+		     cc_after, cc_kern, cc_after - cc_kern);
+
+	return ret;
+}
+
+static unsigned long from_el1(void)
+{
+	unsigned long ret, cc_before, cc_after;
+	unsigned long cc_kern;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = read_cc();
+	cc_kern = readq(vgic_dist_addr + 0x88); /* GICD_IGROUP + 8 */
+	cc_after = read_cc();
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+
+	trace_printk("from_el1: %lu\n",
+		     cc_after - cc_kern);
 
 	return ret;
 }
@@ -369,10 +425,14 @@ static unsigned long trap_profile_end(void)
 	return ret;
 }
 
+
 struct virt_test available_tests[] = {
 	{ "hvc",		hvc_test	},
 	{ "mmio_read_user",	mmio_user	},
 	{ "mmio_read_vgic",	mmio_kernel	},
+	{ "io_latency_write",	io_latency_write	},
+	{ "io_latency_read",	io_latency_read		},
+	{ "from_el1",		from_el1	},
 	{ "eoi",		eoi_test	},
 	{ "noop_guest",		noop_test	},
 	{ "ipi",		ipi_test	},
@@ -547,9 +607,63 @@ static const struct file_operations virttest_once_proc_fops = {
 	.write = virttest_once_write,
 };
 
+static inline u64 read_cntpct(void)
+{
+	u64 cval;
+
+	isb();
+	asm volatile("mrs %0, cntpct_el0" : "=r" (cval));
+
+	return cval;
+}
+
+static irqreturn_t virttest_isr(int irq, void *data)
+{
+	unsigned long cc_handled = 0;
+	unsigned long cc_kern = 0; /* when the kernel issued the irq */
+
+	cc_handled = read_cntpct();
+	cc_kern = readq(vgic_dist_addr + 0x80 + 16); /* GICD_IGROUP */
+
+	trace_printk("irq handled: %lu - %lu = %lu\n",
+		     cc_handled, cc_kern, cc_handled - cc_kern);
+
+	return IRQ_HANDLED;
+}
+
+static void virttest_probe(struct device_node *v_node)
+{
+	unsigned int irq;
+	int ret;
+
+	irq = irq_of_parse_and_map(v_node, 0);
+	if (!irq) {
+		pr_err("could not parse and map irq fdt node\n");
+		return;
+	}
+
+	ret = request_irq(irq, virttest_isr, 0, "virttest-irq", NULL);
+	if (ret) {
+		pr_err("could not request irq %u, error: %d\n", irq, ret);
+		return;
+	}
+
+	pr_info("virttest_probe successfully completed\n");
+}
+
+static const struct of_device_id v_ids[] = {
+	{ .compatible = "columbia,virttest" },
+};
+
 static int __init virt_test_init(void)
 {
+	const struct of_device_id *matched_id;
 	int ret;
+	struct device_node *v_node;
+
+	v_node = of_find_matching_node_and_match(NULL,
+						    v_ids, &matched_id);
+	virttest_probe(v_node);
 
 	/* Initialize and enable the cycle counter on Xen systems */
 	kvm_call_hyp((void*)HVC_CCNT_ENABLE);
