@@ -75,6 +75,36 @@ static bool handle_mmio_misc(struct kvm_vcpu *vcpu,
 	return false;
 }
 
+static bool handle_mmio_igroup(struct kvm_vcpu *vcpu,
+			       struct kvm_exit_mmio *mmio, phys_addr_t offset)
+{
+	if (offset == 0) {
+		if (mmio->is_write) {
+			unsigned long start;
+			unsigned long end;
+
+			isb();
+			end = kvm_arm_read_cc();
+			isb();
+			start = *((u64 *)mmio->data);
+
+			trace_printk("i/o latency write: %lu - %lu = %lu\n",
+				     end, start, end-start);
+		} else {
+			unsigned long start;
+
+			isb();
+			start = kvm_arm_read_cc();
+			isb();
+			*((u64 *)mmio->data) = start;
+		}
+
+		return false;
+	} else {
+		return handle_mmio_raz_wi(vcpu, mmio, offset);
+	}
+}
+
 static bool handle_mmio_set_enable_reg(struct kvm_vcpu *vcpu,
 				       struct kvm_exit_mmio *mmio,
 				       phys_addr_t offset)
@@ -330,7 +360,7 @@ static const struct vgic_io_range vgic_dist_ranges[] = {
 		.base		= GIC_DIST_IGROUP,
 		.len		= VGIC_MAX_IRQS / 8,
 		.bits_per_irq	= 1,
-		.handle_mmio	= handle_mmio_raz_wi,
+		.handle_mmio	= handle_mmio_igroup,
 	},
 	{
 		.base		= GIC_DIST_ENABLE_SET,

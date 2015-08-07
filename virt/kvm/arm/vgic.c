@@ -762,7 +762,7 @@ static bool call_range_handler(struct kvm_vcpu *vcpu,
 	struct kvm_exit_mmio mmio32;
 	bool ret;
 
-	if (likely(mmio->len <= 4))
+	if (likely(mmio->len <= 4) || mmio->len == 8)
 		return range->handle_mmio(vcpu, mmio, offset);
 
 	/*
