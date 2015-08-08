@@ -75,6 +75,24 @@ static bool handle_mmio_misc(struct kvm_vcpu *vcpu,
 	return false;
 }
 
+unsigned long cc_in_el1;
+unsigned long cc_done_post_vgic;
+unsigned long cc_in_io_mem_abort;
+bool measure_exit;
+static volatile unsigned long cc_send_irq = 0;
+
+static inline u64 read_cntpct(void)
+{
+	u64 cval;
+
+	isb();
+	asm volatile("mrs %0, cntpct_el0" : "=r" (cval));
+
+	return cval;
+}
+
+DECLARE_WAIT_QUEUE_HEAD(iolat_wq);
+
 static bool handle_mmio_igroup(struct kvm_vcpu *vcpu,
 			       struct kvm_exit_mmio *mmio, phys_addr_t offset)
 {
@@ -90,6 +108,12 @@ static bool handle_mmio_igroup(struct kvm_vcpu *vcpu,
 
 			trace_printk("i/o latency write: %lu - %lu = %lu\n",
 				     end, start, end-start);
+			trace_printk(" * in_el1: %lu\n",
+				     cc_in_el1 - start);
+			trace_printk(" * done post vgic: %lu\n",
+				     cc_done_post_vgic - start);
+			trace_printk(" * in_io_mem_abort: %lu\n",
+				     cc_in_io_mem_abort - start);
 		} else {
 			unsigned long start;
 
@@ -100,9 +124,64 @@ static bool handle_mmio_igroup(struct kvm_vcpu *vcpu,
 		}
 
 		return false;
+	} else if (offset == 8) {
+		measure_exit = true;
+		return false;
+	} else if (offset == 16) {
+		if (!mmio->is_write) {
+			*((u64 *)mmio->data) = cc_send_irq;
+			cc_send_irq = 0;
+			smp_mb();
+			wake_up_interruptible(&iolat_wq);
+		}
+		return false;
 	} else {
 		return handle_mmio_raz_wi(vcpu, mmio, offset);
 	}
+}
+
+/* Utterly misplaced */
+int iolat_notify_test(void)
+{
+	int err = 0, i;
+	struct kvm *kvm;
+	unsigned long cc;
+
+	spin_lock(&kvm_lock);
+	kvm = list_first_entry(&vm_list, struct kvm, vm_list);
+	if (!kvm) {
+		spin_unlock(&kvm_lock);
+		return -ENXIO;
+	}
+	kvm_get_kvm(kvm);
+	spin_unlock(&kvm_lock);
+
+	/* Test  counter read valid */
+	cc = read_cntpct();
+	if (cc == 0) {
+		err = -ENODEV;
+		goto out;
+	}
+
+	if (cc_send_irq != 0) {
+		err = -EBUSY;
+		goto out;
+	}
+
+	for (i = 0; i < 100000; i++) {
+		isb();
+		cc_send_irq = read_cntpct();
+		isb();
+		kvm_vgic_inject_irq(kvm, 0, 144, true);
+
+		err = wait_event_interruptible(iolat_wq, cc_send_irq == 0);
+		if (err)
+			goto out;
+	}
+out:
+	 kvm_put_kvm(kvm);
+	 cc_send_irq = 0;
+	 return err;
 }
 
 static bool handle_mmio_set_enable_reg(struct kvm_vcpu *vcpu,

@@ -207,6 +207,8 @@ int io_mem_abort(struct kvm_vcpu *vcpu, struct kvm_run *run,
 	 * space do its magic.
 	 */
 
+	cc_in_io_mem_abort = kvm_arm_read_cc();
+
 	if (kvm_vcpu_dabt_isvalid(vcpu)) {
 		ret = decode_hsr(vcpu, fault_ipa, &mmio);
 		if (ret)

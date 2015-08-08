@@ -22,6 +22,7 @@
 #include <linux/err.h>
 #include <linux/kvm_host.h>
 #include <linux/module.h>
+#include <linux/proc_fs.h>
 #include <linux/vmalloc.h>
 #include <linux/fs.h>
 #include <linux/mman.h>
@@ -484,6 +485,8 @@ static int kvm_vcpu_initialized(struct kvm_vcpu *vcpu)
 	return vcpu->arch.target >= 0;
 }
 
+extern bool measure_exit;
+
 /**
  * kvm_arch_vcpu_ioctl_run - the main VCPU run function to execute guest code
  * @vcpu:	The VCPU pointer
@@ -556,7 +559,19 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		kvm_guest_enter();
 		vcpu->mode = IN_GUEST_MODE;
 
+		if (measure_exit) {
+			isb();
+			*vcpu_reg(vcpu, vcpu->arch.mmio_decode.rt) =
+				kvm_arm_read_cc();
+			isb();
+		}
+
 		ret = kvm_call_hyp(__kvm_vcpu_run, vcpu);
+
+		isb();
+		cc_in_el1 = kvm_arm_read_cc();
+		isb();
+		measure_exit = false;
 
 		vcpu->mode = OUTSIDE_GUEST_MODE;
 		kvm_guest_exit();
@@ -579,6 +594,10 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 		kvm_timer_sync_hwstate(vcpu);
 		kvm_vgic_sync_hwstate(vcpu);
+
+		isb();
+		cc_done_post_vgic = kvm_arm_read_cc();
+		isb();
 
 		ret = handle_exit(vcpu, run, ret);
 	}
@@ -1096,6 +1115,35 @@ struct kvm_vcpu *kvm_mpidr_to_vcpu(struct kvm *kvm, unsigned long mpidr)
 	return NULL;
 }
 
+extern int iolat_notify_test(void);
+
+static ssize_t iolattest_write(struct file *file, const char __user *buffer,
+			       size_t count, loff_t *pos)
+{
+	int ret;
+
+	ret = iolat_notify_test();
+	*pos += count;
+	return ret ? ret : count;
+}
+
+static int iolattest_proc_show(struct seq_file *m, void *v)
+{
+	return 0;
+}
+
+static int iolattest_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, iolattest_proc_show, NULL);
+}
+
+static const struct file_operations iolattest_proc_fops = {
+	.owner = THIS_MODULE,
+	.open = iolattest_proc_open,
+	.read = seq_read,
+	.write = iolattest_write,
+};
+
 /**
  * Initialize Hyp-mode and memory mappings on all CPUs.
  */
@@ -1134,6 +1182,9 @@ int kvm_arch_init(void *opaque)
 	hyp_cpu_pm_init();
 
 	kvm_coproc_table_init();
+
+	proc_create("iolattest", 0, NULL, &iolattest_proc_fops);
+
 	return 0;
 out_err:
 	cpu_notifier_register_done();

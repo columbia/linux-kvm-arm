@@ -258,4 +258,8 @@ static inline unsigned long kvm_arm_read_cc(void)
 	return cc;
 }
 
+extern unsigned long cc_in_el1;
+extern unsigned long cc_done_post_vgic;
+extern unsigned long cc_in_io_mem_abort;
+
 #endif /* __ARM64_KVM_HOST_H__ */
