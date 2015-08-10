@@ -173,6 +173,7 @@ enum trap_reason {
 	TRAP_IO_USER,
 	TRAP_IRQ,
 	TRAP_MEMFAULT,
+	TRAP_IO_SGI,
 	TRAP_MAX /* For array sizing */
 };
 

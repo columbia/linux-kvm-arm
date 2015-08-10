@@ -231,7 +231,8 @@ int io_mem_abort(struct kvm_vcpu *vcpu, struct kvm_run *run,
 	}
 
 	if (handle_kernel_mmio(vcpu, run, &mmio)) {
-		kvm_trap_stat_set_exit_reason(vcpu, TRAP_IO_KERNEL);
+		if (vcpu->stat.exit_stats.new_edata->trap_reason != TRAP_IO_SGI)
+			kvm_trap_stat_set_exit_reason(vcpu, TRAP_IO_KERNEL);
 		return 1;
 	}
 
