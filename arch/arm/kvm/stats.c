@@ -296,6 +296,7 @@ static const char* trap_stat_names[TRAP_MAX] = {
 	[TRAP_WFE]		= "WFE",
 	[TRAP_WFI]		= "WFI",
 	[TRAP_IO_KERNEL]	= "IO_KERNEL",
+	[TRAP_IO_SGI]		= "IO_SGI",
 	[TRAP_IO_USER]		= "IO_USER",
 	[TRAP_MEMFAULT]		= "S2_MEM_ABORT",
 	[TRAP_IRQ]		= "IRQ"

@@ -232,6 +232,7 @@ static bool handle_mmio_sgi_reg(struct kvm_vcpu *vcpu,
 	vgic_reg_access(mmio, &reg, offset,
 			ACCESS_READ_RAZ | ACCESS_WRITE_VALUE);
 	if (mmio->is_write) {
+		kvm_trap_stat_set_exit_reason(vcpu, TRAP_IO_SGI);
 		vgic_dispatch_sgi(vcpu, reg);
 		vgic_update_state(vcpu->kvm);
 		return true;
