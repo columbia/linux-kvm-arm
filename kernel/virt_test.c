@@ -77,7 +77,7 @@ u64 inline call_hyp(void *hypfn)
 {
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	return kvm_call_hyp(hypfn);
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 	unsigned long b, c, d;
 	asm volatile ("vmcall" : "+hypfn"(hypfn), "=b"(b), "=c"(c), "=d"(d));
 	/* This is a hyp call for Xen */
@@ -96,9 +96,9 @@ static __always_inline volatile unsigned long read_cc(void)
 	isb();
 	asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
 	isb();
-#elif CONFIG_ARM
+#elif defined(CONFIG_ARM)
 	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 	rdtscll(cc);
 #endif
 	return cc;
@@ -110,9 +110,9 @@ static __always_inline volatile unsigned long read_cc_before(void)
         isb();
         asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
         isb();
-#elif CONFIG_ARM
+#elif defined(CONFIG_ARM)
         asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
         asm volatile ("CPUID\n\t"::: "%rax", "%rbx", "%rcx", "%rdx");
         asm volatile ( "RDTSC\n\t"
                         "shl $0x20, %%rdx\n\t"
@@ -131,9 +131,9 @@ static __always_inline volatile unsigned long read_cc_after(void)
         isb();
         asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
         isb();
-#elif CONFIG_ARM
+#elif defined(CONFIG_ARM)
         asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
         asm volatile (
                         "mov %%cr0, %%rax\n\t"
                         "mov %%rax, %%cr0\n\t"
@@ -207,7 +207,6 @@ static unsigned long noop_test(void)
 {
 	unsigned long ret, cc_before, cc_after;
 	unsigned long flags;
-	unsigned long i = 0;
 
 	local_irq_save(flags);
 	cc_before = read_cc_before();
@@ -225,9 +224,9 @@ static unsigned long mmio_user(void)
 	u32 val;
 
 	cc_before = read_cc_before();
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	val = readl(mmio_read_user_addr + 0x8); // MMIO USER
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 	inl(0x1234);
 #endif
 	cc_after = read_cc_after();
@@ -244,9 +243,9 @@ static unsigned long mmio_kernel(void)
 
 	local_irq_save(flags);
 	cc_before = read_cc_before();
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	val = readl(vgic_dist_addr + 0x8); /* GICD_IIDR */
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 	//val = apic_read(APIC_ID);
 	inb(0x4d0);
 #endif	
@@ -266,9 +265,9 @@ static unsigned long eoi_test(void)
 	val = 1023;
 	local_irq_save(flags);
 	cc_before = read_cc_before();
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	writel(val, vgic_cpu_addr + GICC_EOIR);
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 	apic_write(APIC_EOI, APIC_EOI_ACK);
 #endif
 	cc_after = read_cc_after();
@@ -309,7 +308,7 @@ static unsigned long trap_out_test(void)
 			[after_hvc] "=r" (after_hvc),
 			[eoh] "=r" (eoh): :
 			"x0", "x1", "x2", "x3", "x4");
-#elif CONFIG_ARM
+#elif defined(CONFIG_ARM)
 	asm volatile(
 			"mov r0, #0x4c000000\n\t"
 			"mrc p15, 0, r3, c9, c13, 0\n\t"
@@ -322,7 +321,7 @@ static unsigned long trap_out_test(void)
 			[cc1] "=r" (cc1),
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 	call_hyp((void*)HVC_NOOP);
 	asm volatile("mov %%rdx, %0": "=r" (soh));
 	after_hvc = read_cc_after();
@@ -360,7 +359,7 @@ static unsigned long trap_in_test(void)
 			[cc1] "=r" (cc1),
 			[cc2] "=r" (cc2): :
 			"x0", "x1", "x2", "x3");
-#elif CONFIG_ARM
+#elif defined(CONFIG_ARM)
 	asm volatile(
 			"mov r0, #0x4c000000\n\t"
 			"mrc p15, 0, r3, c9, c13, 0\n\t"
@@ -373,7 +372,7 @@ static unsigned long trap_in_test(void)
 			[cc1] "=r" (cc1),
 			[cc2] "=r" (cc2): :
 			"r0", "r1", "r2", "r3");
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 	cc0 = read_cc_before();
 	call_hyp((void*)HVC_NOOP);
 	asm volatile("mov %%rdx, %0": "=r" (cc1));
@@ -394,7 +393,7 @@ static unsigned long vmswitch_send_test(void)
 	cc_before = read_cc_before();
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 #endif
 	if (ret)
 		kvm_err("Sending HVC VM switch measure error: %lu\n", ret);
@@ -413,7 +412,7 @@ static unsigned long vmswitch_recv_test(void)
 	local_irq_save(flags);
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	cc_before = call_hyp((void*)HVC_VMSWITCH_RCV);
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 #endif
 	cc_after = read_cc_after();
 	call_hyp((void*)HVC_VMSWITCH_DONE);
@@ -455,6 +454,8 @@ static unsigned long el2_exit_top(void)
 			"mov %[cc], x0\n\t":
 			[cc] "=r" (cc)::
 			"x0");
+#else
+	cc = 0;
 #endif
 	local_irq_restore(flags);
 	return cc;
@@ -472,6 +473,8 @@ static unsigned long el2_exit_bot(void)
 			"mov %[cc], x0\n\t":
 			[cc] "=r" (cc)::
 			"x0", "x1");
+#else
+	cc = 0;
 #endif
 	local_irq_restore(flags);
 
@@ -557,7 +560,7 @@ static int init_mmio_test(void)
 out:
 	return ret;
 }
-#elif CONFIG_X86_64
+#elif defined(CONFIG_X86_64)
 static int init_mmio_test(void)
 {
 	int ret = 0;
