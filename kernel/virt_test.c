@@ -484,6 +484,31 @@ static unsigned long io_latency(void)
 	return 1024*128; /* it will run 4096 times */
 }
 
+static unsigned long hvc_breakdown(void)
+{
+       unsigned long flags;
+       unsigned long ret = 0;
+       unsigned long cc0 = 0, cc1 = 0;
+
+       local_irq_save(flags);
+#ifdef CONFIG_ARM64
+       asm volatile(
+                       "mov x0, #0x10000\n\t"
+                       "hvc #0\n\t"
+                       "mov %[cc0], x1\n\t"
+                       "mov %[cc1], x2\n\t":
+                       [cc0] "=r" (cc0),
+                       [cc1] "=r" (cc1)::
+                       "x0", "x1", "x2");
+       ret = cc1 - cc0;
+#else
+       ret = 0;
+#endif
+       local_irq_restore(flags);
+
+       return ret;
+}
+
 struct virt_test available_tests[] = {
 	{ "hvc",		hvc_test	},
 	{ "mmio_read_user",	mmio_user	},
@@ -499,7 +524,8 @@ struct virt_test available_tests[] = {
 	{ "trap-profile-end",   trap_profile_end        },
 	{ "el2-exit-top",	el2_exit_top	        },
 	{ "el2-exit-bot",	el2_exit_bot	        },
-	{ "io-latency"	,	io_latency},
+	{ "io-latency-xen",	io_latency	},
+	{ "hvc-breakdown-xen",	hvc_breakdown	},
 };
 
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
