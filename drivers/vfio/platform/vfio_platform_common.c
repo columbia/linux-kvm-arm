@@ -31,6 +31,11 @@ static const struct vfio_platform_reset_combo reset_lookup_table[] = {
 		.reset_function_name = "vfio_platform_calxedaxgmac_reset",
 		.module_name = "vfio-platform-calxedaxgmac",
 	},
+	{
+		.compat = "amd,xgbe-seattle-v1a",
+		.reset_function_name = "vfio_platform_amdxgbe_reset",
+		.module_name = "vfio-platform-amdxgbe",
+	},
 };
 
 static void vfio_platform_get_reset(struct vfio_platform_device *vdev,
