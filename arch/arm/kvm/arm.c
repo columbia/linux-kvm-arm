@@ -577,7 +577,6 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		kvm_timer_flush_hwstate(vcpu);
 		kvm_vgic_flush_hwstate(vcpu);
 
-
 		local_irq_disable();
 
 		/*
@@ -648,7 +647,6 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 * interrupt line.
 		 */
 		kvm_timer_sync_hwstate(vcpu);
-
 
 		kvm_vgic_sync_hwstate(vcpu);
 

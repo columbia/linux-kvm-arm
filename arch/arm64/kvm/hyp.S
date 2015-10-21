@@ -1032,8 +1032,11 @@ el1_trap:
 
 	/* Guest accessed VFP/SIMD registers, save host, restore Guest */
 	cmp	x2, #ESR_ELx_EC_FP_ASIMD
+	b.ne	500f
+	add	sp, sp, #16
 	b.eq	switch_to_guest_fpsimd
 
+500:
 	cmp	x2, #ESR_ELx_EC_DABT_LOW
 	mov	x0, #ESR_ELx_EC_IABT_LOW
 	ccmp	x2, x0, #4, ne
