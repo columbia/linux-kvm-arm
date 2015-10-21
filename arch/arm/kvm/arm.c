@@ -541,10 +541,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 * involves poking the GIC, which must be done in a
 		 * non-preemptible context.
 		 */
-		preempt_disable();
 		kvm_vgic_flush_hwstate(vcpu);
 
-
+		preempt_disable();
 		local_irq_disable();
 
 		/*
@@ -557,8 +556,8 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 		if (ret <= 0 || need_new_vmid_gen(vcpu->kvm)) {
 			local_irq_enable();
-			kvm_vgic_sync_hwstate(vcpu);
 			preempt_enable();
+			kvm_vgic_sync_hwstate(vcpu);
 			kvm_timer_sync_hwstate(vcpu);
 			continue;
 		}
@@ -607,11 +606,11 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 */
 		kvm_guest_exit();
 		trace_kvm_exit(kvm_vcpu_trap_get_class(vcpu), *vcpu_pc(vcpu));
+		preempt_enable();
 
 
 		kvm_vgic_sync_hwstate(vcpu);
 
-		preempt_enable();
 
 		kvm_timer_sync_hwstate(vcpu);
 
