@@ -752,6 +752,8 @@ static const struct vgic_io_range vgic_redist_ranges[] = {
 	{},
 };
 
+#define SGI_BASE_OFFSET SZ_64K
+
 static bool vgic_v3_queue_sgi(struct kvm_vcpu *vcpu, int irq)
 {
 	if (vgic_queue_irq(vcpu, 0, irq)) {
