@@ -26,18 +26,50 @@
 #define SIMPLE_RING_SIZE __CONST_RING_SIZE(simpleif, PAGE_SIZE)
 
 
-static __always_inline volatile unsigned long read_cc(void)
+static __always_inline volatile unsigned long read_cc_before(void)
 {
-	unsigned long cc;
+        unsigned long cc;
 #ifdef CONFIG_ARM64
-	isb();
-	asm volatile("mrs %0, CNTPCT_EL0" : "=r" (cc) ::);
-	isb();
-#elif CONFIG_ARM
-	asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+        isb();
+        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+        isb();
+#elif defined(CONFIG_ARM)
+        asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#elif defined(CONFIG_X86_64)
+        asm volatile ("CPUID\n\t"::: "%rax", "%rbx", "%rcx", "%rdx");
+        asm volatile ( "RDTSC\n\t"
+                        "shl $0x20, %%rdx\n\t"
+                        "or %%rax, %%rdx\n\t"
+                        "mov %%rdx, %0\n\t"
+                        : "=r" (cc)
+                        :: "%rax", "%rbx", "%rcx", "%rdx");
 #endif
-	return cc;
+        return cc;
 }
+
+static __always_inline volatile unsigned long read_cc_after(void)
+{
+        unsigned long cc;
+#ifdef CONFIG_ARM64
+        isb();
+        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+        isb();
+#elif defined(CONFIG_ARM)
+        asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#elif defined(CONFIG_X86_64)
+        asm volatile (
+                        "mov %%cr0, %%rax\n\t"
+                        "mov %%rax, %%cr0\n\t"
+                        "RDTSC\n\t"
+                        "shl $0x20, %%rdx\n\t"
+                        "or %%rax, %%rdx\n\t"
+                        "mov %%rdx, %0\n\t"
+                        : "=r" (cc)
+                        :: "%rax", "%rdx");
+#endif
+        return cc;
+}
+
 
 unsigned long cc_before;
 unsigned long cc_after;
@@ -50,15 +82,18 @@ struct simplefront_info
 	unsigned int evtchn, irq;
 };
 
+#define HVC_TSC_OFFSET   0x4b000040
 static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
 {
-	
-	cc_after = read_cc();
+	long ret;	
+	cc_after = read_cc_after();
 //	printk("jintack simple frontend get response from backend\n");
-	trace_printk("before:\t%lu\tafter:\t%lu\tdiff:\t%lu\n", cc_before, cc_after, cc_after - cc_before);
-	cc_before = 0;
-/*
 	
+	ret = _hypercall2(long, dummy_hyp, HVC_TSC_OFFSET, 0);
+	trace_printk("before:\t%lu\tafter:\t%lu\tdiff:\t%lu\toffset:\t%ld\n", cc_before, cc_after, cc_after - cc_before, ret);
+	cc_before = 0;
+	/* This is for sending data */
+	/*
 	struct blkfront_info *info = (struct blkfront_info *)dev_id;
 	RING_IDX i, rp;
 	int more_to_do;
@@ -83,7 +118,7 @@ static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
 
 	if (more_to_do)
 		printk("jintack more_to_do??\n");
-*/
+	*/
 	return IRQ_HANDLED;
 }
 
@@ -230,7 +265,7 @@ int simpleif_request_dummy(void)
 	if (cc_before)
 		trace_printk("cc_before overwrite detected, %ld\n", cc_before);
 	cc_before = 100; /* make cache hot */
-	cc_before = read_cc();
+	cc_before = read_cc_before();
 	notify_remote_via_irq(info->irq);
 	HYPERVISOR_sched_op(SCHEDOP_block, NULL);
 	return 0;

@@ -49,42 +49,60 @@ static void simpleif_notify_work(struct xen_simpleif *simpleif)
 	//if (notify)
 }
 */
-
-static __always_inline volatile unsigned long read_cc(void)
+static __always_inline volatile unsigned long read_cc_before(void)
 {
         unsigned long cc;
 #ifdef CONFIG_ARM64
         isb();
-        //asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
-        asm volatile("mrs %0, CNTPCT_EL0" : "=r" (cc) ::);
+        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
         isb();
-#else
+#elif defined(CONFIG_ARM)
         asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#elif defined(CONFIG_X86_64)
+        asm volatile ("CPUID\n\t"::: "%rax", "%rbx", "%rcx", "%rdx");
+        asm volatile ( "RDTSC\n\t"
+                        "shl $0x20, %%rdx\n\t"
+                        "or %%rax, %%rdx\n\t"
+                        "mov %%rdx, %0\n\t"
+                        : "=r" (cc)
+                        :: "%rax", "%rbx", "%rcx", "%rdx");
 #endif
         return cc;
 }
 
+static __always_inline volatile unsigned long read_cc_after(void)
+{
+        unsigned long cc;
+#ifdef CONFIG_ARM64
+        isb();
+        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+        isb();
+#elif defined(CONFIG_ARM)
+        asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
+#elif defined(CONFIG_X86_64)
+        asm volatile (
+                        "mov %%cr0, %%rax\n\t"
+                        "mov %%rax, %%cr0\n\t"
+                        "RDTSC\n\t"
+                        "shl $0x20, %%rdx\n\t"
+                        "or %%rax, %%rdx\n\t"
+                        "mov %%rdx, %0\n\t"
+                        : "=r" (cc)
+                        :: "%rax", "%rdx");
+#endif
+        return cc;
+}
 
 irqreturn_t xen_simpleif_be_int(int irq, void *dev_id)
 {
         struct xen_simpleif *simpleif=dev_id;
-        /* Enable this to measure domU to dom0 */
-	/*
         static unsigned long cc = 0;
-        cc = read_cc();
+        cc = read_cc_after();
+	if (simpleif->irq != 0)
+        	notify_remote_via_irq(simpleif->irq);
+	/* we may need this if we run dom0 and domu on the same core */
+        /* HYPERVISOR_sched_op(SCHEDOP_yield, NULL); */
         trace_printk("jintack simple backend at\t%ld\n", cc);
-	*/
-
-        /* Enable this to measure dom0 to domU */
-	/*
-        static unsigned long cc = 0;
-        trace_printk("jintack simple backend previously at\t%ld\n", cc);
-        cc=1000;
-        cc = read_cc();
-	*/
-
-        notify_remote_via_irq(simpleif->irq);
-//      HYPERVISOR_sched_op(SCHEDOP_yield, NULL);
         return IRQ_HANDLED;
 }
 
