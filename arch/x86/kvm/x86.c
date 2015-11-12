@@ -5931,7 +5931,6 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 	}
 
 	if (nr == HVC_VMSWITCH_SEND) {
-		printk("VMSWITCH_SEND\n");
 		if (!waitqueue_active(&vmswitch_queue)) {
 			ret = -EAGAIN;
 			goto out;
@@ -5947,7 +5946,6 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 
 	if (nr == HVC_VMSWITCH_RCV) {
 		/* Assume we have one other VM running */
-		printk("VMSWITCH_RCV\n");
 		wait_event_interruptible(vmswitch_queue, kvm_vmswitch_ping_sent);
 		kvm_vmswitch_ping_sent = false;
 		ret = cc_before;
