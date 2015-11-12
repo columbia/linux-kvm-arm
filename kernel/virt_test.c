@@ -81,7 +81,7 @@ u64 inline call_hyp(void *hypfn)
 	unsigned long b, c, d;
 	asm volatile ("vmcall" : "+hypfn"(hypfn), "=b"(b), "=c"(c), "=d"(d));
 	/* This is a hyp call for Xen */
-	/* _hypercall0(int, dummy_hyp); */
+	/*  _hypercall2(long, dummy_hyp, 0, 0); */
 #endif
 }
 
@@ -394,6 +394,8 @@ static unsigned long vmswitch_send_test(void)
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
 #elif defined(CONFIG_X86_64)
+	/* This is for Xen */
+	ret = _hypercall2(long, dummy_hyp, HVC_VMSWITCH_SEND, cc_before);
 #endif
 	if (ret)
 		kvm_err("Sending HVC VM switch measure error: %lu\n", ret);
@@ -408,14 +410,29 @@ static unsigned long vmswitch_recv_test(void)
 {
 	unsigned long ret, cc_before, cc_after;
 	unsigned long flags;
+ 	unsigned long num;
 
 	local_irq_save(flags);
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	cc_before = call_hyp((void*)HVC_VMSWITCH_RCV);
 #elif defined(CONFIG_X86_64)
+	
+	/* This assumes that this code runs on Xen HVM */
+
+	num = HVC_VMSWITCH_RCV;
+  	asm volatile (  "mov %[num], %%rax\n\t"
+			"vmcall\n\t"
+			"mov %%rdx, %[cc_before]\n\t"
+			: [cc_before] "=r" (cc_before)
+			: [num] "r" (num)
+			: "%rax", "%rdx");
 #endif
 	cc_after = read_cc_after();
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	call_hyp((void*)HVC_VMSWITCH_DONE);
+#elif defined(CONFIG_X86_64)
+	 _hypercall2(long, dummy_hyp, HVC_VMSWITCH_DONE, 0);
+#endif
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
