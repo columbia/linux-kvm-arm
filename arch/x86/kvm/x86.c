@@ -5899,6 +5899,7 @@ int kvm_hv_hypercall(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
+u64 vmcs_read64(unsigned long field);
 /*
  * kvm_pv_kick_cpu_op:  Kick a vcpu.
  *
@@ -5936,6 +5937,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 			goto out;
 		}
 		cc_before = kvm_register_read(vcpu, VCPU_REGS_RBX);
+		cc_before -= vmcs_read64(TSC_OFFSET);
 		kvm_vmswitch_ping_sent = true;
 		smp_mb();
 		wake_up(&vmswitch_queue);
@@ -5948,7 +5950,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		/* Assume we have one other VM running */
 		wait_event_interruptible(vmswitch_queue, kvm_vmswitch_ping_sent);
 		kvm_vmswitch_ping_sent = false;
-		ret = cc_before;
+		ret = cc_before + vmcs_read64(TSC_OFFSET);
 		goto out;	
 	}
 
