@@ -73,15 +73,19 @@ __asm__(".arch_extension	virt");
 #define PROCFS_MAX_SIZE 128
 #define MAX_MSG_LEN 512
 
+//#define FOR_XEN
+
 u64 inline call_hyp(void *hypfn)
 {
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	return kvm_call_hyp(hypfn);
 #elif defined(CONFIG_X86_64)
+#ifndef FOR_XEN
 	unsigned long b, c, d;
 	asm volatile ("vmcall" : "+hypfn"(hypfn), "=b"(b), "=c"(c), "=d"(d));
-	/* This is a hyp call for Xen */
-	/*  _hypercall2(long, dummy_hyp, 0, 0); */
+#else
+	_hypercall2(long, dummy_hyp, 0, 0);
+#endif
 #endif
 }
 
@@ -394,8 +398,11 @@ static unsigned long vmswitch_send_test(void)
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
 #elif defined(CONFIG_X86_64)
-	/* This is for Xen */
+#ifndef FOR_XEN
+	ret = kvm_hypercall1(HVC_VMSWITCH_SEND, cc_before);
+#else
 	ret = _hypercall2(long, dummy_hyp, HVC_VMSWITCH_SEND, cc_before);
+#endif
 #endif
 	if (ret)
 		kvm_err("Sending HVC VM switch measure error: %lu\n", ret);
@@ -416,9 +423,10 @@ static unsigned long vmswitch_recv_test(void)
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	cc_before = call_hyp((void*)HVC_VMSWITCH_RCV);
 #elif defined(CONFIG_X86_64)
-	
+#ifndef FOR_XEN
+	cc_before = kvm_hypercall0(HVC_VMSWITCH_RCV);
+#else
 	/* This assumes that this code runs on Xen HVM */
-
 	num = HVC_VMSWITCH_RCV;
   	asm volatile (  "mov %[num], %%rax\n\t"
 			"vmcall\n\t"
@@ -427,11 +435,16 @@ static unsigned long vmswitch_recv_test(void)
 			: [num] "r" (num)
 			: "%rax", "%rdx");
 #endif
+#endif
 	cc_after = read_cc_after();
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	call_hyp((void*)HVC_VMSWITCH_DONE);
 #elif defined(CONFIG_X86_64)
-	 _hypercall2(long, dummy_hyp, HVC_VMSWITCH_DONE, 0);
+#ifndef FOR_XEN
+	kvm_hypercall0(HVC_VMSWITCH_DONE);
+#else
+	_hypercall2(long, dummy_hyp, HVC_VMSWITCH_DONE, 0);
+#endif
 #endif
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
