@@ -394,6 +394,7 @@ static unsigned long vmswitch_send_test(void)
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	ret = kvm_call_hyp((void*)HVC_VMSWITCH_SEND, cc_before);
 #elif defined(CONFIG_X86_64)
+	ret = kvm_hypercall1(HVC_VMSWITCH_SEND, cc_before);
 #endif
 	if (ret)
 		kvm_err("Sending HVC VM switch measure error: %lu\n", ret);
@@ -413,9 +414,14 @@ static unsigned long vmswitch_recv_test(void)
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	cc_before = call_hyp((void*)HVC_VMSWITCH_RCV);
 #elif defined(CONFIG_X86_64)
+	cc_before = kvm_hypercall0(HVC_VMSWITCH_RCV);
 #endif
 	cc_after = read_cc_after();
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	call_hyp((void*)HVC_VMSWITCH_DONE);
+#elif defined(CONFIG_X86_64)
+	kvm_hypercall0(HVC_VMSWITCH_DONE);
+#endif
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
 
