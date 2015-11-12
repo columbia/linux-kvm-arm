@@ -172,6 +172,15 @@ struct kvm_stats_debugfs_item debugfs_entries[] = {
 
 u64 __read_mostly host_xcr0;
 
+/* For vmswitch   */
+static volatile bool kvm_vmswitch_ping_sent = false;
+static DECLARE_WAIT_QUEUE_HEAD(vmswitch_queue);
+static unsigned long cc_before;
+
+#define HVC_VMSWITCH_SEND	0x4b000010
+#define HVC_VMSWITCH_RCV	0x4b000020
+#define HVC_VMSWITCH_DONE	0x4b000030
+
 static int emulator_fix_hypercall(struct x86_emulate_ctxt *ctxt);
 
 static inline void kvm_async_pf_hash_reset(struct kvm_vcpu *vcpu)
@@ -5917,6 +5926,36 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 
 	nr = kvm_register_read(vcpu, VCPU_REGS_RAX);
 	if (nr == HVC_NOOP) {
+		ret = 0;
+		goto out;
+	}
+
+	if (nr == HVC_VMSWITCH_SEND) {
+		printk("VMSWITCH_SEND\n");
+		if (!waitqueue_active(&vmswitch_queue)) {
+			ret = -EAGAIN;
+			goto out;
+		}
+		cc_before = kvm_register_read(vcpu, VCPU_REGS_RBX);
+		kvm_vmswitch_ping_sent = true;
+		smp_mb();
+		wake_up(&vmswitch_queue);
+		wait_event_interruptible(vmswitch_queue, !kvm_vmswitch_ping_sent);
+		ret = 0;
+		goto out;
+	}
+
+	if (nr == HVC_VMSWITCH_RCV) {
+		/* Assume we have one other VM running */
+		printk("VMSWITCH_RCV\n");
+		wait_event_interruptible(vmswitch_queue, kvm_vmswitch_ping_sent);
+		kvm_vmswitch_ping_sent = false;
+		ret = cc_before;
+		goto out;	
+	}
+
+	if (nr == HVC_VMSWITCH_DONE) {
+		wake_up_all(&vmswitch_queue);
 		ret = 0;
 		goto out;
 	}
