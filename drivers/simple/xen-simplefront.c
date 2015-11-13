@@ -85,11 +85,14 @@ struct simplefront_info
 #define HVC_TSC_OFFSET   0x4b000040
 static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
 {
-	long ret;	
+	long ret = 0;
 	cc_after = read_cc_after();
 //	printk("jintack simple frontend get response from backend\n");
 	
+	
+#ifdef CONFIG_X86_64
 	ret = _hypercall2(long, dummy_hyp, HVC_TSC_OFFSET, 0);
+#endif
 	trace_printk("before:\t%lu\tafter:\t%lu\tdiff:\t%lu\toffset:\t%ld\n", cc_before, cc_after, cc_after - cc_before, ret);
 	cc_before = 0;
 	/* This is for sending data */
