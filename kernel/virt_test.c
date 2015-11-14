@@ -85,10 +85,6 @@ u64 inline call_hyp(void *hypfn)
 #endif
 }
 
-static noinline void __noop(void)
-{
-}
-
 static __always_inline volatile unsigned long read_cc(void)
 {
 	unsigned long cc;
@@ -103,6 +99,11 @@ static __always_inline volatile unsigned long read_cc(void)
 #endif
 	return cc;
 }
+
+static noinline void __noop(void)
+{
+}
+
 static __always_inline volatile unsigned long read_cc_before(void)
 {
         unsigned long cc;
@@ -507,6 +508,15 @@ static unsigned long io_latency(void)
 	return 1024;
 }
 
+static unsigned long io_latency_out(void)
+{
+	unsigned long cc;
+	cc = read_cc_before();
+	trace_printk("%lu\n", cc);
+	apic_write(APIC_EFEAT, (u32)cc);
+	return 19024*128;
+}
+
 static unsigned long hvc_breakdown(void)
 {
        unsigned long flags;
@@ -548,6 +558,7 @@ struct virt_test available_tests[] = {
 	{ "el2-exit-top",	el2_exit_top	        },
 	{ "el2-exit-bot",	el2_exit_bot	        },
 	{ "io-latency-xen",	io_latency	},
+	{ "io-latency-out-kvm",	io_latency_out	},
 	{ "hvc-breakdown-xen",	hvc_breakdown	},
 };
 
