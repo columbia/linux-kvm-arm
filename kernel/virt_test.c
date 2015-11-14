@@ -504,7 +504,7 @@ static unsigned long el2_exit_bot(void)
 static unsigned long io_latency(void)
 {
 	simpleif_request_dummy();
-	return 1024*32;
+	return 1024;
 }
 
 static unsigned long hvc_breakdown(void)

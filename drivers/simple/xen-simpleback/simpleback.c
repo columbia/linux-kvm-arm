@@ -109,6 +109,8 @@ irqreturn_t xen_simpleif_be_int(int irq, void *dev_id)
 	
 #ifdef CONFIG_ARM64
 	kvm_call_hyp((void*) HVC_SET_BACKEND_TS, cc);
+#elif defined(CONFIG_X86_64)
+	_hypercall2(long, dummy_hyp, HVC_SET_BACKEND_TS, cc);
 #endif
         return IRQ_HANDLED;
 }
