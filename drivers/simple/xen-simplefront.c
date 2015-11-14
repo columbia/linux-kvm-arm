@@ -101,10 +101,23 @@ static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
 	long ret = 0;
 	unsigned long diff;
 	unsigned long backend_ts;
+	unsigned long num;
 	cc_after = read_cc_after();
 	
 #ifdef CONFIG_X86_64
 	ret = _hypercall2(long, dummy_hyp, HVC_TSC_OFFSET, 0);
+	 do {
+		//backend_ts = _hypercall2(long, dummy_hyp, HVC_GET_BACKEND_TS, 0);
+		num = HVC_GET_BACKEND_TS;
+		asm volatile (  "mov %[num], %%rax\n\t"
+				"vmcall\n\t"
+				"mov %%rdx, %[backend_ts]\n\t"
+				: [backend_ts] "=r" (backend_ts)
+				: [num] "r" (num)
+				: "%rax", "%rdx");
+
+	} while (backend_ts == 0);
+	_hypercall2(long, dummy_hyp, HVC_SET_BACKEND_TS, 0);
 #else
 	do {
 		backend_ts = kvm_call_hyp((void*) HVC_GET_BACKEND_TS);
