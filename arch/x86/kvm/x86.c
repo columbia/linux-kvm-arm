@@ -5917,9 +5917,12 @@ static void kvm_pv_kick_cpu_op(struct kvm *kvm, unsigned long flags, int apicid)
 	kvm_irq_delivery_to_apic(kvm, 0, &lapic_irq, NULL);
 }
 
+extern u64 guest_read_tsc(void);
+
 int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 {
 	unsigned long nr, a0, a1, a2, a3, ret;
+	static u64 prev, now;
 	int op_64_bit, r = 1;
 
 	if (kvm_hv_hypercall_enabled(vcpu->kvm))
@@ -5937,7 +5940,8 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 			goto out;
 		}
 		cc_before = kvm_register_read(vcpu, VCPU_REGS_RBX);
-		cc_before -= vmcs_read64(TSC_OFFSET);
+		cc_before = guest_read_tsc() - cc_before;
+		rdtscll(prev);
 		kvm_vmswitch_ping_sent = true;
 		smp_mb();
 		wake_up(&vmswitch_queue);
@@ -5950,7 +5954,8 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		/* Assume we have one other VM running */
 		wait_event_interruptible(vmswitch_queue, kvm_vmswitch_ping_sent);
 		kvm_vmswitch_ping_sent = false;
-		ret = cc_before + vmcs_read64(TSC_OFFSET);
+		rdtscll(now);
+		ret = guest_read_tsc() - (now - prev) - cc_before;
 		goto out;	
 	}
 

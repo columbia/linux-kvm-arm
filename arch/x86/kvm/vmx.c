@@ -2234,7 +2234,6 @@ static void setup_msrs(struct vcpu_vmx *vmx)
  * reads and returns guest's timestamp counter "register"
  * guest_tsc = host_tsc + tsc_offset    -- 21.3
  */
-//static u64 guest_read_tsc(void)
 u64 guest_read_tsc(void)
 {
 	u64 host_tsc, tsc_offset;
