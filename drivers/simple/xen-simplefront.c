@@ -20,6 +20,7 @@
 #include <xen/interface/io/protocols.h>
 
 #include <asm/xen/hypervisor.h>
+#include <linux/kvm_host.h>
 
 #define GRANT_INVALID_REF       0
 
@@ -31,7 +32,8 @@ static __always_inline volatile unsigned long read_cc_before(void)
         unsigned long cc;
 #ifdef CONFIG_ARM64
         isb();
-        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+	/* We read arch counter for I/O latency out to get synchronized counter across pcpus */
+	asm volatile("mrs %0, CNTPCT_EL0" : "=r" (cc) ::); 
         isb();
 #elif defined(CONFIG_ARM)
         asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
@@ -52,7 +54,8 @@ static __always_inline volatile unsigned long read_cc_after(void)
         unsigned long cc;
 #ifdef CONFIG_ARM64
         isb();
-        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+	/* We read arch counter for I/O latency out to get synchronized counter across pcpus */
+	asm volatile("mrs %0, CNTPCT_EL0" : "=r" (cc) ::); 
         isb();
 #elif defined(CONFIG_ARM)
         asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
@@ -83,17 +86,47 @@ struct simplefront_info
 };
 
 #define HVC_TSC_OFFSET   0x4b000040
+#define HVC_GET_BACKEND_TS   0x4b000050
+#define HVC_SET_BACKEND_TS   0x4b000060
+
+unsigned long iolat_cnt = 0;
+unsigned long iolat_sum = 0;
+unsigned long iolat_in_sum = 0;
+unsigned long iolat_out_sum = 0;
+unsigned long iolat_min = ULLONG_MAX;
+unsigned long iolat_out_min = ULLONG_MAX;
+unsigned long iolat_in_min = ULLONG_MAX;
 static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
 {
 	long ret = 0;
+	unsigned long diff;
+	unsigned long backend_ts;
 	cc_after = read_cc_after();
-//	printk("jintack simple frontend get response from backend\n");
-	
 	
 #ifdef CONFIG_X86_64
 	ret = _hypercall2(long, dummy_hyp, HVC_TSC_OFFSET, 0);
+#else
+	do {
+		backend_ts = kvm_call_hyp((void*) HVC_GET_BACKEND_TS);
+	} while (backend_ts == 0);
+	kvm_call_hyp((void*) HVC_SET_BACKEND_TS, 0);
 #endif
-	trace_printk("before:\t%lu\tafter:\t%lu\tdiff:\t%lu\toffset:\t%ld\n", cc_before, cc_after, cc_after - cc_before, ret);
+	iolat_cnt += 1;
+	diff = cc_after - cc_before;
+	iolat_sum += diff;
+	if (iolat_min > diff)
+		iolat_min = diff;
+
+	diff = backend_ts - cc_before;
+	iolat_out_sum += diff;
+	if (iolat_out_min > diff)
+		iolat_out_min = diff;
+
+	diff = cc_after - backend_ts;
+	iolat_in_sum += diff;
+	if (iolat_in_min > diff)
+		iolat_in_min = diff;
+
 	cc_before = 0;
 	/* This is for sending data */
 	/*
@@ -265,9 +298,10 @@ int simpleif_request_dummy(void)
 	info->ring.req_prod_pvt++;
 
 	RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&info->ring, notify);
-	if (cc_before)
-		trace_printk("cc_before overwrite detected, %ld\n", cc_before);
-	cc_before = 100; /* make cache hot */
+	if (cc_before) {
+		/* wait until frontend gets interrupt and reset cc_before */
+		return 0;
+	}
 	cc_before = read_cc_before();
 	notify_remote_via_irq(info->irq);
 	HYPERVISOR_sched_op(SCHEDOP_block, NULL);

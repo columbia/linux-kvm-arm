@@ -13,6 +13,7 @@
 #include <xen/balloon.h>
 #include "common.h"
 
+#include <linux/kvm_host.h>
 static int __init xen_simpleif_init(void)
 {
         int rc = 0;
@@ -54,7 +55,8 @@ static __always_inline volatile unsigned long read_cc_before(void)
         unsigned long cc;
 #ifdef CONFIG_ARM64
         isb();
-        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+	/* We read arch counter for I/O latency out to get synchronized counter across pcpus */
+	asm volatile("mrs %0, CNTPCT_EL0" : "=r" (cc) ::); 
         isb();
 #elif defined(CONFIG_ARM)
         asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
@@ -75,7 +77,8 @@ static __always_inline volatile unsigned long read_cc_after(void)
         unsigned long cc;
 #ifdef CONFIG_ARM64
         isb();
-        asm volatile("mrs %0, PMCCNTR_EL0" : "=r" (cc) ::);
+	/* We read arch counter for I/O latency out to get synchronized counter across pcpus */
+	asm volatile("mrs %0, CNTPCT_EL0" : "=r" (cc) ::); 
         isb();
 #elif defined(CONFIG_ARM)
         asm volatile("mrc p15, 0, %[reg], c9, c13, 0": [reg] "=r" (cc));
@@ -93,6 +96,7 @@ static __always_inline volatile unsigned long read_cc_after(void)
         return cc;
 }
 
+#define HVC_SET_BACKEND_TS   0x4b000060
 irqreturn_t xen_simpleif_be_int(int irq, void *dev_id)
 {
         struct xen_simpleif *simpleif=dev_id;
@@ -102,7 +106,10 @@ irqreturn_t xen_simpleif_be_int(int irq, void *dev_id)
         	notify_remote_via_irq(simpleif->irq);
 	/* we may need this if we run dom0 and domu on the same core */
         /* HYPERVISOR_sched_op(SCHEDOP_yield, NULL); */
-        trace_printk("jintack simple backend at\t%ld\n", cc);
+	
+#ifdef CONFIG_X86_64
+	kvm_call_hyp((void*) HVC_SET_BACKEND_TS, cc);
+#endif
         return IRQ_HANDLED;
 }
 
