@@ -107,7 +107,7 @@ irqreturn_t xen_simpleif_be_int(int irq, void *dev_id)
 	/* we may need this if we run dom0 and domu on the same core */
         /* HYPERVISOR_sched_op(SCHEDOP_yield, NULL); */
 	
-#ifdef CONFIG_X86_64
+#ifdef CONFIG_ARM64
 	kvm_call_hyp((void*) HVC_SET_BACKEND_TS, cc);
 #endif
         return IRQ_HANDLED;
