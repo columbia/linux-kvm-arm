@@ -504,7 +504,7 @@ static unsigned long el2_exit_bot(void)
 static unsigned long io_latency(void)
 {
 	simpleif_request_dummy();
-	return 1024*128; /* it will run 4096 times */
+	return 1024*32;
 }
 
 static unsigned long hvc_breakdown(void)
@@ -705,9 +705,51 @@ static int virt_test_proc_show(struct seq_file *m, void *v)
 	return 0;
 };
 
+extern unsigned long iolat_cnt;
+extern unsigned long iolat_sum;
+extern unsigned long iolat_in_sum;
+extern unsigned long iolat_out_sum;
+extern unsigned long iolat_min;
+extern unsigned long iolat_out_min;
+extern unsigned long iolat_in_min;
+
+static int iolat_show(struct seq_file *m, void *v) {
+	seq_printf(m, "test cnt:\t%lu\n", iolat_cnt);
+	seq_printf(m, "[Total ] min:\t%lu\tavg:\t%lu\n", iolat_min, iolat_sum/iolat_cnt);
+	seq_printf(m, "[IO IN ] min:\t%lu\tavg:\t%lu\n", iolat_in_min, iolat_in_sum/iolat_cnt);
+	seq_printf(m, "[IO OUT] min:\t%lu\tavg:\t%lu\n", iolat_out_min, iolat_out_sum/iolat_cnt);
+	return 0;
+}
+
+static ssize_t iolat_reset(struct file *file, const char __user *buffer,
+		size_t count, loff_t *pos) {
+	int ret;
+	unsigned long val;
+
+	iolat_cnt = 0;
+	iolat_sum = 0;
+	iolat_in_sum = 0;
+	iolat_out_sum = 0;
+	iolat_min = ULLONG_MAX;
+	iolat_in_min = ULLONG_MAX;
+	iolat_out_min = ULLONG_MAX;
+	ret = kstrtoul_from_user(buffer, count, 10, &val);
+	if (ret)
+		return ret;
+
+	*pos += count;
+
+	return ret ? ret : count;
+}
+
 static int virt_test_proc_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, virt_test_proc_show, NULL);
+}
+
+static int iolat_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, iolat_show, NULL);
 }
 
 static const struct file_operations virttest_proc_fops = {
@@ -724,6 +766,13 @@ static const struct file_operations virttest_once_proc_fops = {
 	.write = virttest_once_write,
 };
 
+static const struct file_operations virttest_iolat_fops = {
+	.owner = THIS_MODULE,
+	.open = iolat_open,
+	.read = seq_read,
+	.write = iolat_reset,
+};
+
 static int __init virt_test_init(void)
 {
 	int ret;
@@ -737,6 +786,7 @@ static int __init virt_test_init(void)
 
 	proc_create("virttest", 0, NULL, &virttest_proc_fops);
 	proc_create("virttest_one", 0, NULL, &virttest_once_proc_fops);
+	proc_create("iolat", 0, NULL, &virttest_iolat_fops);
 	pr_info("virt-tests successfully initialized\n");
 	return 0;
 }
