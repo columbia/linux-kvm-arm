@@ -31,6 +31,7 @@
 #include <linux/syscalls.h>
 #include <linux/unistd.h>
 #include <linux/init.h>
+#include <linux/interrupt.h>
 #include <linux/cpu.h>
 #include <linux/kvm_host.h>
 #include <linux/virt_test.h>
@@ -794,6 +795,11 @@ static const struct file_operations virttest_iolat_fops = {
 	.write = iolat_reset,
 };
 
+static irqreturn_t virttest_isr(int irq, void *data)
+{
+	return IRQ_HANDLED;
+}
+
 static int __init virt_test_init(void)
 {
 	int ret;
@@ -802,6 +808,12 @@ static int __init virt_test_init(void)
 	ret = init_mmio_test();
 	if (ret) {
 		pr_err("virt-test: Failed to initialize mmio tests: %d\n", ret);
+		return ret;
+	}
+
+	ret = request_irq(100, virttest_isr, 0, "virttest-irq", NULL);
+	if (ret) {
+		pr_err("could not request irq 100, error: %d\n", ret);
 		return ret;
 	}
 
