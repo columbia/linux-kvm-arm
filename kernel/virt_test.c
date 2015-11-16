@@ -507,7 +507,9 @@ static unsigned long io_latency_out(void)
 	unsigned long cc;
 	cc = read_cc_before();
 	trace_printk("%lu\n", cc);
+#ifdef CONFIG_X86_64
 	apic_write(APIC_EFEAT, (u32)cc);
+#endif
 	return 19024*128;
 }
 
