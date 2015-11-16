@@ -105,9 +105,7 @@ static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
 	cc_after = read_cc_after();
 	
 #ifdef CONFIG_X86_64
-	ret = _hypercall2(long, dummy_hyp, HVC_TSC_OFFSET, 0);
 	 do {
-		//backend_ts = _hypercall2(long, dummy_hyp, HVC_GET_BACKEND_TS, 0);
 		num = HVC_GET_BACKEND_TS;
 		asm volatile (  "mov %[num], %%rax\n\t"
 				"vmcall\n\t"
@@ -318,6 +316,8 @@ int simpleif_request_dummy(void)
 	cc_before = read_cc_before();
 	notify_remote_via_irq(info->irq);
 	HYPERVISOR_sched_op(SCHEDOP_block, NULL);
+	if (cc_before != 0)
+		printk("%s, not woke up by backend\n", __func__);
 	return 0;
 }
 
