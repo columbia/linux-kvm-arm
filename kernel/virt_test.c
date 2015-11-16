@@ -405,7 +405,7 @@ static unsigned long vmswitch_send_test(void)
 #endif
 #endif
 	if (ret)
-		kvm_err("Sending HVC VM switch measure error: %lu\n", ret);
+		kvm_err("Sending HVC VM switch measure error: %ld\n", (long)ret);
 	cc_after = read_cc_after();
 	local_irq_restore(flags);
 	ret = CYCLE_COUNT(cc_before, cc_after);
@@ -426,17 +426,11 @@ static unsigned long vmswitch_recv_test(void)
 #ifndef FOR_XEN
 	cc_before = kvm_hypercall0(HVC_VMSWITCH_RCV);
 #else
-	/* This assumes that this code runs on Xen HVM */
-	num = HVC_VMSWITCH_RCV;
-  	asm volatile (  "mov %[num], %%rax\n\t"
-			"vmcall\n\t"
-			"mov %%rdx, %[cc_before]\n\t"
-			: [cc_before] "=r" (cc_before)
-			: [num] "r" (num)
-			: "%rax", "%rdx");
+	cc_before = _hypercall2(long, dummy_hyp, HVC_VMSWITCH_RCV, 0);
 #endif
 #endif
 	cc_after = read_cc_after();
+
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 	call_hyp((void*)HVC_VMSWITCH_DONE);
 #elif defined(CONFIG_X86_64)
