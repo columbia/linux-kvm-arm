@@ -9,9 +9,15 @@
 #include <asm/hypervisor.h>
 #include <asm/xen/hypercall.h>
 
+extern void virttest_inject_irq(void);
 static ssize_t iolat_test(struct file *file, const char __user *buffer,
 		size_t count, loff_t *pos)
 {
+	int ret;
+
+	virttest_inject_irq();
+	*pos += count;
+	return ret ? ret : count;
 }
 
 static int iolat_show(struct seq_file *m, void *v)

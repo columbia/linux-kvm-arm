@@ -2047,6 +2047,32 @@ void kvm_apic_accept_events(struct kvm_vcpu *vcpu)
 	}
 }
 
+extern int ioapic_set_irq(struct kvm_ioapic *ioapic, unsigned int irq,
+		int irq_level, bool line_status);
+void virttest_inject_irq(void)
+{
+	struct kvm *kvm;
+	struct kvm_vcpu *vcpu;
+	struct kvm_ioapic *ioapic;
+
+	spin_lock(&kvm_lock);
+	kvm = list_first_entry(&vm_list, struct kvm, vm_list);
+	if (!kvm) {
+		spin_unlock(&kvm_lock);
+		return;
+	}
+	kvm_get_kvm(kvm);
+	vcpu = kvm->vcpus[0];
+	ioapic = ioapic_irqchip(kvm);
+	spin_unlock(&kvm_lock);
+
+	//apic_set_irr(10, vcpu->arch.apic);
+	ioapic_set_irq(ioapic, 10, 1, true);
+
+	kvm_put_kvm(kvm);
+	return;
+}
+
 void kvm_lapic_init(void)
 {
 	/* do not patch jump label more than once per second */

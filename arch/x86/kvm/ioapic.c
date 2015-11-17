@@ -170,7 +170,7 @@ static bool rtc_irq_check_coalesced(struct kvm_ioapic *ioapic)
 	return false;
 }
 
-static int ioapic_set_irq(struct kvm_ioapic *ioapic, unsigned int irq,
+int ioapic_set_irq(struct kvm_ioapic *ioapic, unsigned int irq,
 		int irq_level, bool line_status)
 {
 	union kvm_ioapic_redirect_entry entry;
