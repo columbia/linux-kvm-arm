@@ -12,7 +12,7 @@
 extern unsigned long virttest_inject_irq(void);
 
 #define IOLAT_OUT "IO Latnecy Out "
-#define GOAL (1ULL << 28)
+#define GOAL (1ULL << 2)
 
 static unsigned long io_latency_in(void)
 {
@@ -62,12 +62,21 @@ static void loop_test(void)
 	return;
 }
 
+static void run_test_once(void)
+{
+	unsigned long sample;
+	//sample = test->test_fn();
+	sample = io_latency_in();
+	trace_printk("virt-test once %s\t%lu\n", IOLAT_OUT, sample);
+}
+
 static ssize_t iolat_test(struct file *file, const char __user *buffer,
 		size_t count, loff_t *pos)
 {
 	int ret;
 
-	loop_test();
+	//loop_test();
+	run_test_once();
 
 	*pos += count;
 	return ret ? ret : count;

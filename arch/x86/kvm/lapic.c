@@ -2054,10 +2054,15 @@ void kvm_apic_accept_events(struct kvm_vcpu *vcpu)
 
 void virttest_iolat_in_fin(struct kvm_vcpu *vcpu)
 {
-	cc_ack_irq = kvm_register_read(vcpu, VCPU_REGS_RBX);
+	unsigned long guest_cc, now;
+
+	smp_mb();
+	guest_cc = kvm_register_read(vcpu, VCPU_REGS_RBX);
+	guest_cc = guest_read_tsc() - guest_cc;
+	rdtscll(now);
+	cc_ack_irq = now - guest_cc;
 	smp_mb();
 	wake_up_interruptible(&iolat_wq);
-	trace_printk("guest ACKED\n");
 	return;
 }
 
@@ -2083,15 +2088,18 @@ unsigned long virttest_inject_irq(void)
 	spin_unlock(&kvm_lock);
 
 	cc_ack_irq = 0;
-	cc_send_irq = guest_read_tsc();
+	smp_wmb();
+	//cc_send_irq = (unsigned long)guest_read_tsc();
+	rdtscll(cc_send_irq);
 	smp_wmb();
 	ioapic_set_irq(ioapic, 10, 1, true);
+	smp_wmb();
 	err = wait_event_interruptible(iolat_wq, cc_ack_irq);
 	if (err) {
 		printk("Failed in event interruptable");
 		goto out;
 	}
-	trace_printk("Send IRQ ack %lu send %lu\n", cc_ack_irq, cc_send_irq);
+	//trace_printk("Send IRQ ack %lu send %lu\n", cc_ack_irq, cc_send_irq);
 	ret = cc_ack_irq - cc_send_irq;
 
 out:
