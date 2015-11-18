@@ -44,6 +44,7 @@
 #define HVC_VMSWITCH_SEND	0x4b000010
 #define HVC_VMSWITCH_RCV	0x4b000020
 #define HVC_VMSWITCH_DONE	0x4b000030
+#define HVC_IOLATENCY_END	0x4b000040
 #define TRAP_MEASURE_START	0x10000
 #define TRAP_MEASURE_END	0x11000
 
@@ -502,16 +503,21 @@ static unsigned long io_latency(void)
 	return 1024*32;
 }
 
+#ifdef CONFIG_X86_64
 static unsigned long io_latency_out(void)
 {
-	unsigned long cc;
-	cc = read_cc_before();
-	trace_printk("%lu\n", cc);
-#ifdef CONFIG_X86_64
-	apic_write(APIC_EFEAT, (u32)cc);
-#endif
-	return 19024*128;
+	unsigned long ret, flags, cc_before, cc_after;
+
+	local_irq_save(flags);
+	cc_before = read_cc();
+	apic_write(APIC_EFEAT, NULL);
+	cc_after = kvm_hypercall0(HVC_IOLATENCY_END);
+	ret = CYCLE_COUNT(cc_before, cc_after);	
+	local_irq_restore(flags);
+
+	return ret;
 }
+#endif
 
 static unsigned long hvc_breakdown(void)
 {
