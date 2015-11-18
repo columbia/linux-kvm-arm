@@ -180,7 +180,10 @@ static unsigned long cc_before;
 #define HVC_VMSWITCH_SEND	0x4b000010
 #define HVC_VMSWITCH_RCV	0x4b000020
 #define HVC_VMSWITCH_DONE	0x4b000030
-#define HVC_IOLATENCY_END	0x4b000040
+#define HVC_IOLATENCY_OUT_END	0x4b000040
+#define HVC_IOLATENCY_IN_END	0x4b000050
+
+extern void virttest_iolat_in_fin(void);
 
 static int emulator_fix_hypercall(struct x86_emulate_ctxt *ctxt);
 
@@ -5967,10 +5970,16 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		goto out;
 	}
 
-	if (nr == HVC_IOLATENCY_END) {
+	if (nr == HVC_IOLATENCY_OUT_END) {
 		ret = iolat_out_cc;
 		kvm_register_write(vcpu, VCPU_REGS_RAX, ret);
 		return 1;
+	}
+
+	if (nr == HVC_IOLATENCY_IN_END) {
+		virttest_iolat_in_fin();
+		ret = 0;
+		goto out;
 	}
 
 	a0 = kvm_register_read(vcpu, VCPU_REGS_RBX);

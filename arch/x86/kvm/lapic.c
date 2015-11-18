@@ -75,6 +75,9 @@
 #define VEC_POS(v) ((v) & (32 - 1))
 #define REG_POS(v) (((v) >> 5) << 4)
 
+DECLARE_WAIT_QUEUE_HEAD(iolat_wq);
+static volatile unsigned long cc_ack_irq = 0;
+
 static inline void apic_set_reg(struct kvm_lapic *apic, int reg_off, u32 val)
 {
 	*((u32 *) (apic->regs + reg_off)) = val;
@@ -2049,29 +2052,51 @@ void kvm_apic_accept_events(struct kvm_vcpu *vcpu)
 	}
 }
 
+void virttest_iolat_in_fin(struct kvm_vcpu *vcpu)
+{
+	cc_ack_irq = kvm_register_read(vcpu, VCPU_REGS_RBX);
+	smp_mb();
+	wake_up_interruptible(&iolat_wq);
+	trace_printk("guest ACKED\n");
+	return;
+}
+
 extern int ioapic_set_irq(struct kvm_ioapic *ioapic, unsigned int irq,
 		int irq_level, bool line_status);
-void virttest_inject_irq(void)
+unsigned long virttest_inject_irq(void)
 {
 	struct kvm *kvm;
 	struct kvm_vcpu *vcpu;
 	struct kvm_ioapic *ioapic;
+	unsigned long cc_send_irq, ret = 0;
+	int err;
 
 	spin_lock(&kvm_lock);
 	kvm = list_first_entry(&vm_list, struct kvm, vm_list);
 	if (!kvm) {
 		spin_unlock(&kvm_lock);
-		return;
+		return ret;
 	}
 	kvm_get_kvm(kvm);
 	vcpu = kvm->vcpus[0];
 	ioapic = ioapic_irqchip(kvm);
 	spin_unlock(&kvm_lock);
 
+	cc_ack_irq = 0;
+	cc_send_irq = guest_read_tsc();
+	smp_wmb();
 	ioapic_set_irq(ioapic, 10, 1, true);
+	err = wait_event_interruptible(iolat_wq, cc_ack_irq);
+	if (err) {
+		printk("Failed in event interruptable");
+		goto out;
+	}
+	trace_printk("Send IRQ ack %lu send %lu\n", cc_ack_irq, cc_send_irq);
+	ret = cc_ack_irq - cc_send_irq;
 
+out:
 	kvm_put_kvm(kvm);
-	return;
+	return ret;
 }
 
 void kvm_lapic_init(void)
