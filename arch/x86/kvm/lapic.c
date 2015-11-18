@@ -2066,7 +2066,6 @@ void virttest_inject_irq(void)
 	ioapic = ioapic_irqchip(kvm);
 	spin_unlock(&kvm_lock);
 
-	//apic_set_irr(10, vcpu->arch.apic);
 	ioapic_set_irq(ioapic, 10, 1, true);
 
 	kvm_put_kvm(kvm);

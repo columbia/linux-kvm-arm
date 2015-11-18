@@ -335,10 +335,10 @@ static int ioapic_service(struct kvm_ioapic *ioapic, int irq, bool line_status)
 		return -1;
 
 	ioapic_debug("dest=%x dest_mode=%x delivery_mode=%x "
-		     "vector=%x trig_mode=%x\n",
+		     "vector=%x trig_mode=%x line_status %d\n",
 		     entry->fields.dest_id, entry->fields.dest_mode,
 		     entry->fields.delivery_mode, entry->fields.vector,
-		     entry->fields.trig_mode);
+		     entry->fields.trig_mode, line_status);
 
 	irqe.dest_id = entry->fields.dest_id;
 	irqe.vector = entry->fields.vector;
@@ -445,6 +445,10 @@ static void __kvm_ioapic_update_eoi(struct kvm_vcpu *vcpu,
 
 		if (trigger_mode != IOAPIC_LEVEL_TRIG)
 			continue;
+
+		/* HACK: Force to reset pin 10 in remote IRR */
+		if (i == 10)
+			ioapic->irr &= ~(1 << i);
 
 		ASSERT(ent->fields.trig_mode == IOAPIC_LEVEL_TRIG);
 		ent->fields.remote_irr = 0;
