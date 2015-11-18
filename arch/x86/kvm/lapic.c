@@ -1221,6 +1221,8 @@ static void apic_manage_nmi_watchdog(struct kvm_lapic *apic, u32 lvt0_val)
 }
 
 extern u64 guest_read_tsc(void);
+extern unsigned long iolat_out_cc;
+
 static int apic_reg_write(struct kvm_lapic *apic, u32 reg, u32 val)
 {
 	int ret = 0;
@@ -1351,7 +1353,7 @@ static int apic_reg_write(struct kvm_lapic *apic, u32 reg, u32 val)
 			ret = 1;
 		break;
 	case APIC_EFEAT:
-		trace_printk("IO-Latency out %lu %lu\n", (unsigned long)val, (unsigned long)guest_read_tsc());
+		iolat_out_cc = (unsigned long)guest_read_tsc();
 		ret = 0;
 		break;
 	default:
