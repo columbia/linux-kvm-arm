@@ -513,9 +513,9 @@ static unsigned long io_latency(void)
 	return 1024*32;
 }
 
-#ifdef CONFIG_X86_64
 static unsigned long io_latency_out(void)
 {
+#ifdef CONFIG_X86_64
 	unsigned long ret, flags, cc_before, cc_after;
 
 	local_irq_save(flags);
@@ -526,8 +526,10 @@ static unsigned long io_latency_out(void)
 	local_irq_restore(flags);
 
 	return ret;
-}
+#else
+	return 0;
 #endif
+}
 
 static unsigned long hvc_breakdown(void)
 {
