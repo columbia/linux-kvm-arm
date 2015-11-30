@@ -48,9 +48,11 @@
 #define TRAP_MEASURE_START	0x10000
 #define TRAP_MEASURE_END	0x11000
 
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
 static void *mmio_read_user_addr;
 static void *vgic_dist_addr;
 static void *vgic_cpu_addr;
+#endif
 
 volatile int cpu1_ipi_ack;
 extern int simpleif_request_dummy(void);
@@ -88,6 +90,8 @@ u64 inline call_hyp(void *hypfn)
 	_hypercall2(long, dummy_hyp, 0, 0);
 #endif
 #endif
+	/* We don't really use the return value on x86 */
+	return 0;
 }
 
 static __always_inline volatile unsigned long read_cc(void)
@@ -227,11 +231,10 @@ static unsigned long noop_test(void)
 static unsigned long mmio_user(void)
 {
 	unsigned long ret, cc_before, cc_after;
-	u32 val;
 
 	cc_before = read_cc_before();
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
-	val = readl(mmio_read_user_addr + 0x8); // MMIO USER
+	readl(mmio_read_user_addr + 0x8); // MMIO USER
 #elif defined(CONFIG_X86_64)
 	inl(0x1234);
 #endif
@@ -244,13 +247,12 @@ static unsigned long mmio_user(void)
 static unsigned long mmio_kernel(void)
 {
 	unsigned long ret, cc_before, cc_after;
-	u32 val;
 	unsigned long flags;
 
 	local_irq_save(flags);
 	cc_before = read_cc_before();
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
-	val = readl(vgic_dist_addr + 0x8); /* GICD_IIDR */
+	readl(vgic_dist_addr + 0x8); /* GICD_IIDR */
 #elif defined(CONFIG_X86_64)
 	//val = apic_read(APIC_ID);
 	inb(0x4d0);
@@ -288,10 +290,9 @@ static unsigned long trap_out_test(void)
 	unsigned long flags;
 	unsigned long trap_out = 0;
 	unsigned long before_hvc= 0, soh = 0, after_hvc = 0;
-#ifndef CONFIG_ARM64
-	unsigned long cc0 = 0, cc1 = 0, cc2 = 0;
-#endif
+#ifdef CONFIG_ARM64
 	unsigned long eoh = 0; /* end of hyp */
+#endif
 
 	before_hvc = 0, soh = 0, after_hvc = 0;
 	local_irq_save(flags);
@@ -320,12 +321,12 @@ static unsigned long trap_out_test(void)
 			"mrc p15, 0, r3, c9, c13, 0\n\t"
 			"hvc #0\n\t"
 			"mrc p15, 0, r2, c9, c13, 0\n\t"
-			"mov %[cc0], r3\n\t"
-			"mov %[cc1], r1\n\t"
-			"mov %[cc2], r2\n\t":
-			[cc0] "=r" (cc0),
-			[cc1] "=r" (cc1),
-			[cc2] "=r" (cc2): :
+			"mov %[before_hvc], r3\n\t"
+			"mov %[soh], r1\n\t"
+			"mov %[after_hvc], r2\n\t":
+			[before_hvc] "=r" (before_hvc),
+			[soh] "=r" (soh),
+			[after_hvc] "=r" (after_hvc): :
 			"r0", "r1", "r2", "r3");
 #elif defined(CONFIG_X86_64)
 	call_hyp((void*)HVC_NOOP);
@@ -419,7 +420,6 @@ static unsigned long vmswitch_recv_test(void)
 {
 	unsigned long ret, cc_before, cc_after;
 	unsigned long flags;
- 	unsigned long num;
 
 	local_irq_save(flags);
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
@@ -545,10 +545,8 @@ static unsigned long hvc_breakdown(void)
                        [cc0] "=r" (cc0),
                        [cc1] "=r" (cc1)::
                        "x0", "x1", "x2");
-       ret = cc1 - cc0;
-#else
-       ret = 0;
 #endif
+       ret = cc1 - cc0;
        local_irq_restore(flags);
 
        return ret;
