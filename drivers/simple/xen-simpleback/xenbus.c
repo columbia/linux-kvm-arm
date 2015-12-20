@@ -17,11 +17,11 @@ static void backend_changed(struct xenbus_watch *watch,
                             const char **vec, unsigned int len);
 static int xen_simpleback_remove(struct xenbus_device *dev);
 
-/* TODO */
+/* TODO 
 static void xen_simpleif_free(void)
 {
 }
-
+*/
 int __init xen_simpleif_interface_init(void)
 {
 	xen_simpleif_cachep = kmem_cache_create("simpleif_cache",
@@ -123,7 +123,7 @@ static int xen_simpleback_remove(struct xenbus_device *dev)
         return 0;
 }
 
-static int xen_simpleif_map(struct xen_simpleif *simpleif, unsigned long shared_page,
+static int xen_simpleif_map(struct xen_simpleif *simpleif, grant_ref_t *gref,
                          unsigned int evtchn)
 {
 	int err;
@@ -139,7 +139,7 @@ static int xen_simpleif_map(struct xen_simpleif *simpleif, unsigned long shared_
 	if (simpleif->simple_ring == NULL)
 		printk("jintack hahah simple_ring is null\n");
 
-	err = xenbus_map_ring_valloc(simpleif->be->dev, shared_page, &simpleif->simple_ring);
+	err = xenbus_map_ring_valloc(simpleif->be->dev, gref, 1, &simpleif->simple_ring);
 	if (err < 0)
 		return err;
 	
@@ -164,11 +164,11 @@ static int connect_ring(struct backend_info *be)
 {
 
 	struct xenbus_device *dev = be->dev;
-	unsigned long ring_ref;
+	unsigned int ring_ref;
 	unsigned int evtchn;
 	int err;
 
-	err = xenbus_gather(XBT_NIL, dev->otherend, "ring-ref", "%lu",
+	err = xenbus_gather(XBT_NIL, dev->otherend, "ring-ref", "%u",
 	                            &ring_ref, "event-channel", "%u", &evtchn, NULL);
 
 	if (err) {
@@ -178,9 +178,9 @@ static int connect_ring(struct backend_info *be)
 		return err;
 	}
 
-	err = xen_simpleif_map(be->simpleif, ring_ref, evtchn);
+	err = xen_simpleif_map(be->simpleif, &ring_ref, evtchn);
 	if (err) {
-		xenbus_dev_fatal(dev, err, "mapping ring-ref %lu port %u",
+		xenbus_dev_fatal(dev, err, "mapping ring-ref %u port %u",
 				ring_ref, evtchn);
 		return err;
 	}

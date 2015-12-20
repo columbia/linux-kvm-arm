@@ -12,7 +12,7 @@
 #include <xen/xenbus.h>
 #include <xen/grant_table.h>
 #include <xen/events.h>
-#include <xen/page.h>
+/*#include <xen/page.h>*/
 #include <xen/platform_pci.h>
 
 #include <xen/interface/grant_table.h>
@@ -98,14 +98,14 @@ unsigned long iolat_out_min = ULLONG_MAX;
 unsigned long iolat_in_min = ULLONG_MAX;
 static irqreturn_t simpleif_interrupt(int irq, void *dev_id)
 {
-	long ret = 0;
 	unsigned long diff;
 	unsigned long backend_ts;
-	unsigned long num;
 	cc_after = read_cc_after();
 	
 #ifdef CONFIG_X86_64
-	 do {
+	long ret = 0;
+	unsigned long num;
+	do {
 		num = HVC_GET_BACKEND_TS;
 		asm volatile (  "mov %[num], %%rax\n\t"
 				"vmcall\n\t"
@@ -174,6 +174,7 @@ static int setup_simplering(struct xenbus_device *dev,
 {
 	struct simpleif_sring *sring;
 	int err;
+	grant_ref_t gref[XENBUS_MAX_RING_PAGES];
 
 	info->ring_ref = GRANT_INVALID_REF;
 
@@ -186,7 +187,7 @@ static int setup_simplering(struct xenbus_device *dev,
 
 	SHARED_RING_INIT(sring);
 	FRONT_RING_INIT(&info->ring, sring, PAGE_SIZE);
-	err = xenbus_grant_ring(dev, virt_to_mfn(info->ring.sring));
+	err = xenbus_grant_ring(dev, info->ring.sring, 1, gref);
 	if (err < 0) {
 		free_page((unsigned long)sring);
 		info->ring.sring = NULL;
