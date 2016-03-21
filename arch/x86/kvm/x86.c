@@ -5929,12 +5929,19 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 	unsigned long nr, a0, a1, a2, a3, ret;
 	static u64 prev, now;
 	int op_64_bit, r = 1;
+	u64 tsc_offset, trap_tsc;
 
 	if (kvm_hv_hypercall_enabled(vcpu->kvm))
 		return kvm_hv_hypercall(vcpu);
 
 	nr = kvm_register_read(vcpu, VCPU_REGS_RAX);
 	if (nr == HVC_NOOP) {
+		ret = 0;
+		goto out;
+	} else if (nr == 0x4b000001) {
+		trap_tsc = kvm_register_read(vcpu, VCPU_REGS_RDX);
+		tsc_offset = vmcs_read64(TSC_OFFSET);
+		kvm_register_write(vcpu, VCPU_REGS_RDX, trap_tsc + tsc_offset);
 		ret = 0;
 		goto out;
 	}

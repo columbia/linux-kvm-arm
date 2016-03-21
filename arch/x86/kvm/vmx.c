@@ -8222,7 +8222,7 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		"rdtsc \n\t"
 		"shl $0x20, %%" _ASM_DX "\n\t"
 		"or %%" _ASM_AX ", %%" _ASM_DX "\n\t"
-		"vmresume \n\t"
+		"mov $0x4b000001, %%" _ASM_AX "\n\t" 
 		"3: "
 		/* Save guest registers, load host registers, keep flags */
 		"mov %0, %c[wordsize](%%" _ASM_SP ") \n\t"
