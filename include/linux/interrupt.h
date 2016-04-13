@@ -711,4 +711,6 @@ extern char __softirqentry_text_end[];
 #define __softirq_entry
 #endif
 
+extern void set_irq_notifiers(void (*start)(void), void (*end)(void));
+
 #endif

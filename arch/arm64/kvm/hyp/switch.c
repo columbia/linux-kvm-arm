@@ -238,6 +238,7 @@ static int __hyp_text __guest_run(struct kvm_vcpu *vcpu)
 	struct kvm_cpu_context *guest_ctxt;
 	bool fp_enabled;
 	u64 exit_code;
+	struct kvm_exit_data prev, new;
 
 	vcpu = kern_hyp_va(vcpu);
 	write_sysreg(vcpu, tpidr_el2);
@@ -262,10 +263,18 @@ static int __hyp_text __guest_run(struct kvm_vcpu *vcpu)
 	__sysreg_restore_guest_state(guest_ctxt);
 	__debug_restore_state(vcpu, kern_hyp_va(vcpu->arch.debug_ptr), guest_ctxt);
 
+	vcpu->stat.exit_stats.new_edata->entry_el2 = read_cntpct();
+	prev = *vcpu->stat.exit_stats.prev_edata;
+	new = *vcpu->stat.exit_stats.new_edata;
+	*vcpu->stat.exit_stats.prev_edata = new;
+	*vcpu->stat.exit_stats.new_edata = prev;
+
 	/* Jump in the fire! */
 again:
 	exit_code = __guest_enter(vcpu, host_ctxt);
 	/* And we're baaack! */
+
+	vcpu->stat.exit_stats.new_edata->exit_el2 = read_cntpct();
 
 	if (exit_code == ARM_EXCEPTION_TRAP && !__populate_fault_info(vcpu))
 		goto again;

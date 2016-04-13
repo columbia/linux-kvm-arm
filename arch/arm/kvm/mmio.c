@@ -212,6 +212,7 @@ int io_mem_abort(struct kvm_vcpu *vcpu, struct kvm_run *run,
 			memcpy(run->mmio.data, data_buf, len);
 		vcpu->stat.mmio_exit_kernel++;
 		kvm_handle_mmio_return(vcpu, run);
+		kvm_trap_stat_set_exit_reason(vcpu, TRAP_IO_KERNEL);
 		return 1;
 	}
 
@@ -219,5 +220,6 @@ int io_mem_abort(struct kvm_vcpu *vcpu, struct kvm_run *run,
 		memcpy(run->mmio.data, data_buf, len);
 	vcpu->stat.mmio_exit_user++;
 	run->exit_reason	= KVM_EXIT_MMIO;
+	kvm_trap_stat_set_exit_reason(vcpu, TRAP_IO_USER);
 	return 0;
 }
