@@ -38,6 +38,8 @@ static int handle_hvc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	int ret;
 
+	kvm_trap_stat_set_exit_reason(vcpu, TRAP_HVC);
+
 	trace_kvm_hvc_arm64(*vcpu_pc(vcpu), vcpu_get_reg(vcpu, 0),
 			    kvm_vcpu_hvc_get_imm(vcpu));
 	vcpu->stat.hvc_exit_stat++;
@@ -72,10 +74,12 @@ static int handle_smc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 static int kvm_handle_wfx(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
 	if (kvm_vcpu_get_hsr(vcpu) & ESR_ELx_WFx_ISS_WFE) {
+		kvm_trap_stat_set_exit_reason(vcpu, TRAP_WFE);
 		trace_kvm_wfx_arm64(*vcpu_pc(vcpu), true);
 		vcpu->stat.wfe_exit_stat++;
 		kvm_vcpu_on_spin(vcpu);
 	} else {
+		kvm_trap_stat_set_exit_reason(vcpu, TRAP_WFI);
 		trace_kvm_wfx_arm64(*vcpu_pc(vcpu), false);
 		vcpu->stat.wfi_exit_stat++;
 		kvm_vcpu_block(vcpu);
@@ -168,11 +172,16 @@ static exit_handle_fn kvm_get_exit_handler(struct kvm_vcpu *vcpu)
 int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *run,
 		       int exception_index)
 {
+	int ret;
 	exit_handle_fn exit_handler;
+
+	kvm_stat_handle_exit_begin(vcpu);
 
 	switch (exception_index) {
 	case ARM_EXCEPTION_IRQ:
-		return 1;
+		kvm_trap_stat_set_exit_reason(vcpu, TRAP_IRQ);
+		ret = 1;
+		break;
 	case ARM_EXCEPTION_TRAP:
 		/*
 		 * See ARM ARM B1.14.1: "Hyp traps on instructions
@@ -180,7 +189,8 @@ int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *run,
 		 */
 		if (!kvm_condition_valid(vcpu)) {
 			kvm_skip_instr(vcpu, kvm_vcpu_trap_il_is32bit(vcpu));
-			return 1;
+			ret = 1;
+			goto out;
 		}
 
 		exit_handler = kvm_get_exit_handler(vcpu);
@@ -190,6 +200,11 @@ int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *run,
 		kvm_pr_unimpl("Unsupported exception type: %d",
 			      exception_index);
 		run->exit_reason = KVM_EXIT_INTERNAL_ERROR;
-		return 0;
+		ret = 0;
+		break;
 	}
+
+out:
+	kvm_stat_handle_exit_end(vcpu);
+	return ret;
 }
