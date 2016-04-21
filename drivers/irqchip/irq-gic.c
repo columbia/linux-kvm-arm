@@ -326,21 +326,6 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 }
 #endif
 
-#ifdef CONFIG_PM
-static int gic_set_wake(struct irq_data *d, unsigned int on)
-{
-	int ret = -ENXIO;
-
-	if (gic_arch_extn.irq_set_wake)
-		ret = gic_arch_extn.irq_set_wake(d, on);
-
-	return ret;
-}
-
-#else
-#define gic_set_wake	NULL
-#endif
-
 static void (*notify_irq_start)(void) = NULL;
 static void (*notify_irq_end)(void) = NULL;
 
