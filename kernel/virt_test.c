@@ -198,6 +198,35 @@ static unsigned long ipi_test(void)
 
 }
 
+static void __attribute__((optimize("O0"))) run_marc_test(void)
+{
+	asm volatile (
+			"mov x19, #(1 << 20)\n\t"
+			"1: mov x0, #0x4b000000\n\t"
+			"isb \n\t"
+			"hvc #0\n\t"
+			"isb \n\t"
+			"sub x19, x19, #1\n\t"
+			"cbnz x19, 1b" : : : "x0", "x19"
+			);
+}
+
+static unsigned long marc_test(void)
+{
+	unsigned long ret, cc_before, cc_after;
+	unsigned long flags;
+
+	local_irq_save(flags);
+	cc_before = read_cc_before();
+	run_marc_test();
+	cc_after = read_cc_after();
+	local_irq_restore(flags);
+	ret = CYCLE_COUNT(cc_before, cc_after);
+	// trace_printk("virt-test once %s\t%lu\n", "marc", ret);
+
+	return ret;
+}
+
 static unsigned long hvc_test(void)
 {
 	unsigned long ret, cc_before, cc_after;
@@ -572,6 +601,7 @@ struct virt_test available_tests[] = {
 	{ "io-latency-xen",	io_latency	},
 	{ "io-latency-out-kvm",	io_latency_out	},
 	{ "hvc-breakdown-xen",	hvc_breakdown	},
+	{ "marc",		marc_test	},
 };
 
 #if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
@@ -774,6 +804,7 @@ static int iolat_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, iolat_show, NULL);
 }
+
 
 static const struct file_operations virttest_proc_fops = {
 	.owner = THIS_MODULE,
