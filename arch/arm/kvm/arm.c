@@ -1254,7 +1254,7 @@ void kvm_arch_exit(void)
 static int arm_init(void)
 {
 	int rc = kvm_init(NULL, sizeof(struct kvm_vcpu), 0, THIS_MODULE);
-	if (rc)
+	if (!rc)
 		kvm_init_trap_stats();
 
 	return rc;
