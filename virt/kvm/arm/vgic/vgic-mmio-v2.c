@@ -88,7 +88,7 @@ static void vgic_mmio_write_sgir(struct kvm_vcpu *source_vcpu,
 	case 0x3:		/* reserved */
 		return;
 	}
-	kvm_trap_stat_set_exit_reason(vcpu, TRAP_IO_SGI);
+	kvm_trap_stat_set_exit_reason(source_vcpu, TRAP_IO_SGI);
 
 	kvm_for_each_vcpu(c, vcpu, source_vcpu->kvm) {
 		struct vgic_irq *irq;
