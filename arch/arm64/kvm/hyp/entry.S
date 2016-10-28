@@ -31,6 +31,12 @@
 	.text
 	.pushsection	.hyp.text, "ax"
 
+.macro read_pcounter reg
+	isb
+	mrs \reg, CNTPCT_EL0
+	isb
+.endm
+
 .macro save_callee_saved_regs ctxt
 	stp	x19, x20, [\ctxt, #CPU_XREG_OFFSET(19)]
 	stp	x21, x22, [\ctxt, #CPU_XREG_OFFSET(21)]
@@ -83,6 +89,19 @@ ENTRY(__guest_enter)
 
 	// x19-x29, lr
 	restore_callee_saved_regs x1
+
+	stp	x2, x3, [sp, #-16]!
+	read_pcounter x2
+	ldr	x1, [x0, #VCPU_NEW_EDATA]
+	kern_hyp_va x1
+	str     x2, [x1, #EDATA_ENTRY_EL2]
+
+	// We are done with an obervation, switch new and prev edata pointers
+	ldr	x2, [x0, #VCPU_PREV_EDATA] // prev = s->prev_edata
+	ldr	x1, [x0, #VCPU_NEW_EDATA] // new = s->new_edata
+	str	x1, [x0, #VCPU_PREV_EDATA] // s->prev_edata = new
+	str	x2, [x0, #VCPU_NEW_EDATA]  // s->new_edata = prev
+	ldp	x2, x3, [sp], #16
 
 	// Last bits of the 64bit state
 	ldp	x0, x1, [sp], #16
