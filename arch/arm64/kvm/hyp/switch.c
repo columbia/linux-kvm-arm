@@ -132,9 +132,6 @@ static int __hyp_text __guest_run(struct kvm_vcpu *vcpu)
 	exit_code = __guest_enter(vcpu, host_ctxt);
 	/* And we're baaack! */
 
-	new_edata = kern_hyp_va(vcpu->stat.exit_stats.new_edata);
-	new_edata->exit_el2 = kvm_arm_read_pcounter();
-
 	fp_enabled = __fpsimd_enabled();
 
 	__sysreg_save_state(guest_ctxt);

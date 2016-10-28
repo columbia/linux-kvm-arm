@@ -126,5 +126,10 @@ int main(void)
 #endif
   DEFINE(ARM_SMCCC_RES_X0_OFFS,	offsetof(struct arm_smccc_res, a0));
   DEFINE(ARM_SMCCC_RES_X2_OFFS,	offsetof(struct arm_smccc_res, a2));
+
+  DEFINE(VCPU_NEW_EDATA,    	offsetof(struct kvm_vcpu, stat.exit_stats.new_edata));
+  DEFINE(VCPU_PREV_EDATA,    	offsetof(struct kvm_vcpu, stat.exit_stats.prev_edata));
+  DEFINE(EDATA_EXIT_EL2,    	offsetof(struct kvm_exit_data, exit_el2));
+  DEFINE(EDATA_ENTRY_EL2,    	offsetof(struct kvm_exit_data, entry_el2));
   return 0;
 }

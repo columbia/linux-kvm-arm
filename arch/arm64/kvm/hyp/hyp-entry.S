@@ -24,9 +24,16 @@
 #include <asm/kvm_arm.h>
 #include <asm/kvm_asm.h>
 #include <asm/kvm_mmu.h>
+#include <asm/asm-offsets.h>
 
 	.text
 	.pushsection	.hyp.text, "ax"
+
+.macro read_pcounter reg
+	isb
+	mrs \reg, CNTPCT_EL0
+	isb
+.endm
 
 .macro	save_x0_to_x3
 	stp	x0, x1, [sp, #-16]!
@@ -40,6 +47,8 @@
 
 el1_sync:				// Guest trapped into EL2
 	save_x0_to_x3
+	read_pcounter x2
+	stp	x1, x2, [sp, #-16]!
 
 	mrs	x1, esr_el2
 	lsr	x2, x1, #ESR_ELx_EC_SHIFT
@@ -51,6 +60,7 @@ el1_sync:				// Guest trapped into EL2
 	cbnz	x3, el1_trap		// called HVC
 
 	/* Here, we're pretty sure the host called HVC. */
+	add	sp, sp, #16			// Ignore read_pcounter
 	restore_x0_to_x3
 
 	/* Check for __hyp_get_vectors */
@@ -81,8 +91,11 @@ el1_trap:
 
 	/* Guest accessed VFP/SIMD registers, save host, restore Guest */
 	cmp	x2, #ESR_ELx_EC_FP_ASIMD
-	b.eq	__fpsimd_guest_restore
+	b.ne	500f
+	ldp	x1, x2, [sp], #16
+	b	__fpsimd_guest_restore
 
+500:
 	cmp	x2, #ESR_ELx_EC_DABT_LOW
 	mov	x0, #ESR_ELx_EC_IABT_LOW
 	ccmp	x2, x0, #4, ne
@@ -137,6 +150,12 @@ alternative_endif
 	str	x2, [x0, #VCPU_FAR_EL2]
 	str	x3, [x0, #VCPU_HPFAR_EL2]
 
+	/* Store the read_pcounter result */
+	ldp	x1, x2, [sp], #16
+	ldr	x1, [x0, #VCPU_NEW_EDATA]
+	kern_hyp_va x1
+	str     x2, [x1, #EDATA_EXIT_EL2]
+
 	mov	x1, #ARM_EXCEPTION_TRAP
 	b	__guest_exit
 
@@ -152,6 +171,13 @@ alternative_endif
 el1_irq:
 	save_x0_to_x3
 	mrs	x0, tpidr_el2
+
+	/* Store the read_pcounter result */
+	read_pcounter x2
+	ldr	x1, [x0, #VCPU_NEW_EDATA]
+	kern_hyp_va x1
+	str     x2, [x1, #EDATA_EXIT_EL2]
+
 	mov	x1, #ARM_EXCEPTION_IRQ
 	b	__guest_exit
 
