@@ -145,5 +145,10 @@ int main(void)
   DEFINE(HIBERN_PBE_ORIG,	offsetof(struct pbe, orig_address));
   DEFINE(HIBERN_PBE_ADDR,	offsetof(struct pbe, address));
   DEFINE(HIBERN_PBE_NEXT,	offsetof(struct pbe, next));
+
+  DEFINE(VCPU_NEW_EDATA,    	offsetof(struct kvm_vcpu, stat.exit_stats.new_edata));
+  DEFINE(VCPU_PREV_EDATA,    	offsetof(struct kvm_vcpu, stat.exit_stats.prev_edata));
+  DEFINE(EDATA_EXIT_EL2,    	offsetof(struct kvm_exit_data, exit_el2));
+  DEFINE(EDATA_ENTRY_EL2,    	offsetof(struct kvm_exit_data, entry_el2));
   return 0;
 }

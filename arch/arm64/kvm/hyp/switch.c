@@ -276,9 +276,6 @@ again:
 	exit_code = __guest_enter(vcpu, host_ctxt);
 	/* And we're baaack! */
 
-	new_edata = kern_hyp_va(vcpu->stat.exit_stats.new_edata);
-	new_edata->exit_el2 = kvm_arm_read_pcounter();
-
 	if (exit_code == ARM_EXCEPTION_TRAP && !__populate_fault_info(vcpu))
 		goto again;
 
